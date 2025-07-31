@@ -179,5 +179,24 @@ namespace server.Controllers.DanhMuc
                 return StatusCode(500, $"An error occurred: {ex.Message}");
             }
         }
+
+        [HttpGet("search")]
+        public async Task<ActionResult<IEnumerable<Dm_DonViTinhDto>>> Search([FromQuery] string searchTerm)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(searchTerm))
+                    return Ok(Enumerable.Empty<Dm_DonViTinhDto>());
+
+                var results = await _service.SearchAsync(searchTerm);
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while searching for Dm_DonViTinh");
+                return StatusCode(500, $"Lỗi server: {ex.Message}");
+            }
+        }
+
     }
 }

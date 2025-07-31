@@ -162,5 +162,25 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_DonViTinhImpl
             return result > 0;
         }
 
+        // Tìm kiếm theo từ khóa
+        public async Task<IEnumerable<Dm_DonViTinh>> SearchAsync(string searchTerm)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return Enumerable.Empty<Dm_DonViTinh>();
+
+            var sql = @"SELECT ""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""NgayHieuLuc"", ""NgayHetHieuLuc"", 
+                           ""CreatedBy"", ""CreatedDate"", ""ModifiedBy"", ""ModifiedDate"", ""IsDelete""
+                    FROM ""Dm_DonViTinh"" 
+                    WHERE ""IsDelete"" = false 
+                    AND (LOWER(""Ma"") LIKE LOWER(@SearchTerm) OR LOWER(""Ten"") LIKE LOWER(@SearchTerm))
+                    ORDER BY ""CreatedDate"" DESC";
+            
+            var parameters = new DynamicParameters();
+            parameters.Add("SearchTerm", $"%{searchTerm}%");
+            
+            _logger.LogInformation("Executing search query: {Sql}", sql);
+            var results = await _dbConnection.QueryAsync<Dm_DonViTinh>(sql, parameters);
+            return results ?? Enumerable.Empty<Dm_DonViTinh>();
+        }
     }
 }

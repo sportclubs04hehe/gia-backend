@@ -3,8 +3,6 @@ using server.Dtos.Common;
 using server.Dtos.DanhMuc.Dm_DonViTinh;
 using server.Models.DanhMuc;
 using server.Repository.IDanhMuc.IDm_DonViTinh;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 
 namespace server.Service
 {
@@ -91,5 +89,15 @@ namespace server.Service
                 
             return result;
         }
+
+        public async Task<IEnumerable<Dm_DonViTinhDto>> SearchAsync(string searchTerm)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return Enumerable.Empty<Dm_DonViTinhDto>();
+
+            var entities = await _repository.SearchAsync(searchTerm);
+            return _mapper.Map<IEnumerable<Dm_DonViTinhDto>>(entities);
+        }
+
     }
 }

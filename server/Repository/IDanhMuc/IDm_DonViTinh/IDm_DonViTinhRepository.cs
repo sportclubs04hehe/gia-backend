@@ -12,5 +12,6 @@ namespace server.Repository.IDanhMuc.IDm_DonViTinh
         Task<Dm_DonViTinh> CreateAsync(Dm_DonViTinh entity);
         Task<bool> UpdateAsync(Dm_DonViTinh entity);
         Task<bool> DeleteAsync(Guid id);
+        Task<IEnumerable<Dm_DonViTinh>> SearchAsync(string searchTerm);
     }
 }
