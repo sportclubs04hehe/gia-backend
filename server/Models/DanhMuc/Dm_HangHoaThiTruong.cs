@@ -1,9 +1,13 @@
-﻿namespace server.Models.DanhMuc
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace server.Models.DanhMuc
 {
-    public class Dm_HangHoaThiTruong
+    public class Dm_HangHoaThiTruong : BaseModel
     {
-        public int Id { get; set; }
-        public string MaHangHoa { get; set; } = string.Empty;
-        public string TenHangHoa { get; set; } = string.Empty;
+        public required string Ma { get; set; }
+        public required string Ten { get; set; }
+        public string? GhiChu { get; set; }
+        public string? DacTinh { get; set; }
+        public Guid? DonViTinhId { get; set; }
     }
 }

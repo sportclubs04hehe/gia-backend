@@ -6,10 +6,6 @@ namespace server.Models
     {
         [Key]
         public Guid Id { get; set; }
-        public DateTime NgayHieuLuc { get; set; }
-
-        public DateTime NgayHetHieuLuc { get; set; }
-
         public bool IsDelete { get; set; } = false;
 
         public string? CreatedBy { get; set; }
