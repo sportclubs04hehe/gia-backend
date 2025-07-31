@@ -1,15 +1,14 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-
-namespace server.Models.DanhMuc
+﻿namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruong
 {
-    public class Dm_HangHoaThiTruong : BaseModel
+    public class DmHangHoaThiTruongCreateDto
     {
-        public required string Ma { get; set; }
-        public required string Ten { get; set; }
+        public string Ma { get; set; }
+        public string Ten { get; set; }
         public string? GhiChu { get; set; }
         public string? DacTinh { get; set; }
         public Guid? DonViTinhId { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
+        public Guid? ParentId { get; set; }  // ID của node cha trong cây
     }
 }

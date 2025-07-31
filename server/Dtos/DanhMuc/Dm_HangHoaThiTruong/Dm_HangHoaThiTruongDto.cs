@@ -1,11 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-
-namespace server.Models.DanhMuc
+﻿namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruong
 {
-    public class Dm_HangHoaThiTruong : BaseModel
+    // Dùng cho thao tác cơ bản (lấy)
+    public class Dm_HangHoaThiTruongDto : BaseDto
     {
-        public required string Ma { get; set; }
-        public required string Ten { get; set; }
+        public string Ma { get; set; } = null!;
+        public string Ten { get; set; } = null!;
         public string? GhiChu { get; set; }
         public string? DacTinh { get; set; }
         public Guid? DonViTinhId { get; set; }
