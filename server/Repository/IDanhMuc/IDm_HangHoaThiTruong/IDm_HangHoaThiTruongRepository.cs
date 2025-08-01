@@ -6,7 +6,6 @@ namespace server.Repository.IDanhMuc.IDm_HangHoaThiTruong
     {
         Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null);
         
-        // Thêm phương thức mới
         Task<Dm_HangHoaThiTruong?> GetByIdAsync(Guid id);
     }
 }

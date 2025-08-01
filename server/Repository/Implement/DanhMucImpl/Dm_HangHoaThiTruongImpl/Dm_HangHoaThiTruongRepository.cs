@@ -9,12 +9,15 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
     {
         private readonly IDbConnection _dbConnection;
         private readonly ILogger<Dm_HangHoaThiTruongRepository> _logger;
+        private readonly IDm_HangHoaThiTruongHierarchyRepository _hierarchyRepository;
 
-        public Dm_HangHoaThiTruongRepository(IDbConnection dbConnection, 
-            ILogger<Dm_HangHoaThiTruongRepository> logger)
+        public Dm_HangHoaThiTruongRepository(IDbConnection dbConnection,
+            ILogger<Dm_HangHoaThiTruongRepository> logger,
+            IDm_HangHoaThiTruongHierarchyRepository hierarchyRepository)
         {
             _dbConnection = dbConnection;
             _logger = logger;
+            _hierarchyRepository = hierarchyRepository;
         }
 
         public async Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null)
@@ -23,13 +26,20 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
             if (entity.Id == Guid.Empty)
                 entity.Id = Guid.NewGuid();
 
-            // SQL để thêm mới hàng hóa
+            // SQL để thêm mới hàng hóa - Sử dụng dấu ngoặc kép cho tên bảng và cột
             var insertSql = @"
-                INSERT INTO Dm_HangHoaThiTruong (Id, Ma, Ten, GhiChu, DacTinh, DonViTinhId, NgayHieuLuc, NgayHetHieuLuc, CreatedDate, UpdatedDate)
-                VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId, @NgayHieuLuc, @NgayHetHieuLuc, GETDATE(), GETDATE());
-                SELECT * FROM Dm_HangHoaThiTruong WHERE Id = @Id;";
+                INSERT INTO ""Dm_HangHoaThiTruong"" (""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""DacTinh"", ""DonViTinhId"", 
+                                                   ""NgayHieuLuc"", ""NgayHetHieuLuc"", ""CreatedDate"", ""ModifiedDate"", ""IsDelete"")
+                VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId, @NgayHieuLuc, @NgayHetHieuLuc, 
+                        NOW(), NOW(), @IsDelete);
+                SELECT * FROM ""Dm_HangHoaThiTruong"" WHERE ""Id"" = @Id;";
 
             _logger.LogInformation($"Execute SQL: {insertSql} with parameters: {System.Text.Json.JsonSerializer.Serialize(entity)}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
 
             using (var transaction = _dbConnection.BeginTransaction())
             {
@@ -40,7 +50,7 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
                         insertSql, entity, transaction);
 
                     // Thêm mối quan hệ trong TreeClosure
-                    await UpdateTreeClosureAsync(entity.Id, parentId, transaction);
+                    await _hierarchyRepository.UpdateTreeClosureAsync(entity.Id, parentId, transaction);
 
                     transaction.Commit();
                     return result;
@@ -54,45 +64,23 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
         }
 
-        private async Task UpdateTreeClosureAsync(Guid entityId, Guid? parentId, IDbTransaction transaction)
-        {
-            // 1. Luôn tạo quan hệ tự tham chiếu (node đến chính nó với độ sâu 0)
-            var selfReferenceSql = @"
-                INSERT INTO TreeClosure (AncestorId, DescendantId, Depth)
-                VALUES (@EntityId, @EntityId, 0);";
-
-            _logger.LogInformation($"Execute SQL: {selfReferenceSql} with EntityId: {entityId}");
-            await _dbConnection.ExecuteAsync(selfReferenceSql, new { EntityId = entityId }, transaction);
-
-            // 2. Nếu có parent, cập nhật quan hệ với cha và tổ tiên
-            if (parentId.HasValue)
-            {
-                var ancestorsSql = @"
-                    INSERT INTO TreeClosure (AncestorId, DescendantId, Depth)
-                    SELECT AncestorId, @EntityId, Depth + 1
-                    FROM TreeClosure
-                    WHERE DescendantId = @ParentId;";
-
-                _logger.LogInformation($"Execute SQL: {ancestorsSql} with EntityId: {entityId}, ParentId: {parentId}");
-                await _dbConnection.ExecuteAsync(
-                    ancestorsSql,
-                    new { EntityId = entityId, ParentId = parentId },
-                    transaction);
-            }
-        }
-
-        // Thêm phương thức này vào lớp Dm_HangHoaThiTruongRepository
         public async Task<Dm_HangHoaThiTruong?> GetByIdAsync(Guid id)
         {
             var sql = @"
-                SELECT * FROM Dm_HangHoaThiTruong 
-                WHERE Id = @Id AND IsDeleted = 0";
+                SELECT * FROM ""Dm_HangHoaThiTruong"" 
+                WHERE ""Id"" = @Id AND ""IsDelete"" = false";
 
             _logger.LogInformation($"Execute SQL: {sql} with Id: {id}");
-            
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
             var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(sql, new { Id = id });
-            
+
             return result;
         }
+
     }
 }
