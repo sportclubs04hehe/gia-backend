@@ -35,21 +35,6 @@ namespace server.Controllers.DanhMuc
             }
         }
 
-        // Lấy tất cả đơn vị tính
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Dm_DonViTinhDto>>> GetAll()
-        {
-            try
-            {
-                var result = await _service.GetAllAsync();
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Lỗi server: {ex.Message}");
-            }
-        }
-
         // Lấy đơn vị tính theo Id
         [HttpGet("{id}")]
         public async Task<ActionResult<Dm_DonViTinhDto>> GetById(Guid id)

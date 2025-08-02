@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.Extensions.Logging;
-using server.Dtos.DanhMuc.Dm_HangHoaThiTruong;
+using server.Dtos.Common;
+using server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto;
 using server.Models.DanhMuc;
 using server.Repository.UnitOfWork;
 
@@ -20,6 +21,38 @@ namespace server.Service.Impl
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _logger = logger;
+        }
+
+        public async Task<PagedResult<Dm_HangHoaThiTruongDto>> GetChildrenAsync(
+            Guid parentId,
+            PagedRequest request,
+            string searchTerm = null)
+        {
+            try
+            {
+                // Get data from repository
+                var result = await _unitOfWork.HangHoaThiTruong.GetChildrenAsync(
+                    parentId,
+                    request,
+                    searchTerm);
+
+                // Map to DTOs
+                var items = _mapper.Map<IEnumerable<Dm_HangHoaThiTruongDto>>(result.Items);
+
+                // Return paged result with mapped items
+                return new PagedResult<Dm_HangHoaThiTruongDto>
+                {
+                    Items = items,
+                    TotalCount = result.TotalCount,
+                    PageNumber = result.PageNumber,
+                    PageSize = result.PageSize
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi khi lấy danh sách con của hàng hóa thị trường với ID: {parentId}");
+                throw;
+            }
         }
 
         public async Task<Dm_HangHoaThiTruongDto> CreateAsync(DmHangHoaThiTruongCreateDto createDto)

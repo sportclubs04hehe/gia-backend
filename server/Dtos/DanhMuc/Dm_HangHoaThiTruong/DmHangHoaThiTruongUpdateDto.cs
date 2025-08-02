@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruong
+namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
 {
     public class DmHangHoaThiTruongUpdateDto
     {

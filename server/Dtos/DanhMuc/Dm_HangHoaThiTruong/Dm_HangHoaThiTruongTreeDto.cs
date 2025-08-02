@@ -1,4 +1,4 @@
-﻿namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruong
+﻿namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
 {
     /// <summary>
     /// Dùng cho tree view (lazy loading hoặc full tree), có Children để lồng cấu trúc.
@@ -11,6 +11,7 @@
         public string? GhiChu { get; set; }
         public string? DacTinh { get; set; }
         public Guid? DonViTinhId { get; set; }
+        public string? DonViTinhTen { get; set; }
         public int Depth { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }

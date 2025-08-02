@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using server.Dtos.DanhMuc.Dm_HangHoaThiTruong;
+using server.Dtos.Common;
+using server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto;
 using server.Service;
 
 namespace server.Controllers.DanhMuc
@@ -18,6 +19,49 @@ namespace server.Controllers.DanhMuc
         {
             _service = service;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Lấy danh sách các hàng hóa con trực tiếp của một hàng hóa cha
+        /// </summary>
+        /// <param name="parentId">ID của hàng hóa cha</param>
+        /// <param name="pageNumber">Số trang (mặc định: 1)</param>
+        /// <param name="pageSize">Kích thước trang (mặc định: 10)</param>
+        /// <param name="sortBy">Sắp xếp theo trường (mặc định: CreatedDate)</param>
+        /// <param name="sortDescending">Sắp xếp giảm dần (mặc định: false)</param>
+        /// <param name="searchTerm">Từ khóa tìm kiếm (tùy chọn)</param>
+        /// <returns>Danh sách các hàng hóa con với phân trang</returns>
+        [HttpGet("children/{parentId}")]
+        public async Task<IActionResult> GetChildren(
+            Guid parentId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string sortBy = "CreatedDate",
+            [FromQuery] bool sortDescending = false,
+            [FromQuery] string? searchTerm = null)
+        {
+            try
+            {
+                // Create paging request
+                var request = new PagedRequest
+                {
+                    PageNumber = pageNumber > 0 ? pageNumber : 1,
+                    PageSize = pageSize > 0 ? pageSize : 10,
+                    SortBy = sortBy,
+                    SortDescending = sortDescending
+                };
+
+                // Call service method
+                var result = await _service.GetChildrenAsync(parentId, request, searchTerm);
+
+                // Return paged result
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi khi lấy danh sách con của hàng hóa thị trường với ID: {parentId}");
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
         }
 
         /// <summary>
