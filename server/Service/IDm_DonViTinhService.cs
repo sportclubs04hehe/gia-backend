@@ -13,6 +13,6 @@ namespace server.Service
         Task<bool> UpdateAsync(DmDonViTinhUpdateDto updateDto);
         Task<bool> DeleteAsync(Guid id);
         Task<ImportResultDto> ImportFromExcelAsync(IFormFile file);
-        Task<IEnumerable<Dm_DonViTinhDto>> SearchAsync(string searchTerm);
+        Task<PagedResult<Dm_DonViTinhDto>> SearchAsync(string searchTerm, int pageNumber = 1, int pageSize = 50);
     }
 }

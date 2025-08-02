@@ -181,14 +181,17 @@ namespace server.Controllers.DanhMuc
         }
 
         [HttpGet("search")]
-        public async Task<ActionResult<IEnumerable<Dm_DonViTinhDto>>> Search([FromQuery] string searchTerm)
+        public async Task<ActionResult<PagedResult<Dm_DonViTinhDto>>> Search(
+            [FromQuery] string searchTerm,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 50)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(searchTerm))
-                    return Ok(Enumerable.Empty<Dm_DonViTinhDto>());
+                    return Ok(new PagedResult<Dm_DonViTinhDto> { PageNumber = pageNumber, PageSize = pageSize });
 
-                var results = await _service.SearchAsync(searchTerm);
+                var results = await _service.SearchAsync(searchTerm, pageNumber, pageSize);
                 return Ok(results);
             }
             catch (Exception ex)

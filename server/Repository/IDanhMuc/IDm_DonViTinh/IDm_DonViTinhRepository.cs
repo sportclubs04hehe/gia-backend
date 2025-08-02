@@ -15,6 +15,6 @@ namespace server.Repository.IDanhMuc.IDm_DonViTinh
         Task<Dm_DonViTinh> CreateAsync(Dm_DonViTinh entity, IDbTransaction transaction = null);
         Task<bool> UpdateAsync(Dm_DonViTinh entity, IDbTransaction transaction = null);
         Task<bool> DeleteAsync(Guid id, IDbTransaction transaction = null);
-        Task<IEnumerable<Dm_DonViTinh>> SearchAsync(string searchTerm);
+        Task<PagedResult<Dm_DonViTinh>> SearchAsync(string searchTerm, int pageNumber = 1, int pageSize = 50);
     }
 }

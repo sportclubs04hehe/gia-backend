@@ -186,13 +186,24 @@ namespace server.Service
             }
         }
 
-        public async Task<IEnumerable<Dm_DonViTinhDto>> SearchAsync(string searchTerm)
+        public async Task<PagedResult<Dm_DonViTinhDto>> SearchAsync(string searchTerm, int pageNumber = 1, int pageSize = 50)
         {
             if (string.IsNullOrWhiteSpace(searchTerm))
-                return Enumerable.Empty<Dm_DonViTinhDto>();
+                return new PagedResult<Dm_DonViTinhDto>
+                {
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
+                };
 
-            var entities = await _unitOfWork.DonViTinh.SearchAsync(searchTerm);
-            return _mapper.Map<IEnumerable<Dm_DonViTinhDto>>(entities);
+            var result = await _unitOfWork.DonViTinh.SearchAsync(searchTerm, pageNumber, pageSize);
+            
+            return new PagedResult<Dm_DonViTinhDto>
+            {
+                Items = _mapper.Map<IEnumerable<Dm_DonViTinhDto>>(result.Items),
+                TotalCount = result.TotalCount,
+                PageNumber = result.PageNumber,
+                PageSize = result.PageSize
+            };
         }
     }
 }

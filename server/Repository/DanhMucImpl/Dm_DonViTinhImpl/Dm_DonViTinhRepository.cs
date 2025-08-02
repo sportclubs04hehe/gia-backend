@@ -200,5 +200,51 @@ namespace server.Repository.DanhMucImpl.Dm_DonViTinhImpl
             var results = await _dbConnection.QueryAsync<Dm_DonViTinh>(sql, parameters);
             return results ?? Enumerable.Empty<Dm_DonViTinh>();
         }
+
+        // Tìm kiếm theo từ khóa có phân trang
+        public async Task<PagedResult<Dm_DonViTinh>> SearchAsync(string searchTerm, int pageNumber = 1, int pageSize = 50)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return new PagedResult<Dm_DonViTinh> 
+                { 
+                    PageNumber = pageNumber, 
+                    PageSize = pageSize 
+                };
+
+            var whereClause = "WHERE \"IsDelete\" = false AND (LOWER(\"Ma\") LIKE LOWER(@SearchTerm) OR LOWER(\"Ten\") LIKE LOWER(@SearchTerm))";
+            var parameters = new DynamicParameters();
+            parameters.Add("SearchTerm", $"%{searchTerm}%");
+            parameters.Add("Offset", (pageNumber - 1) * pageSize);
+            parameters.Add("PageSize", pageSize);
+
+            var sql = $@"
+                -- Đếm tổng số bản ghi
+                SELECT COUNT(*) 
+                FROM ""Dm_DonViTinh"" 
+                {whereClause};
+
+                -- Lấy dữ liệu phân trang
+                SELECT ""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""NgayHieuLuc"", ""NgayHetHieuLuc"", 
+                       ""CreatedBy"", ""CreatedDate"", ""ModifiedBy"", ""ModifiedDate"", ""IsDelete""
+                FROM ""Dm_DonViTinh"" 
+                {whereClause}
+                ORDER BY ""CreatedDate"" DESC
+                LIMIT @PageSize OFFSET @Offset";
+    
+            _logger.LogInformation("Executing paginated search query: {Sql}", sql);
+    
+            using var multi = await _dbConnection.QueryMultipleAsync(sql, parameters);
+    
+            var totalCount = await multi.ReadSingleAsync<int>();
+            var items = await multi.ReadAsync<Dm_DonViTinh>();
+
+            return new PagedResult<Dm_DonViTinh>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
     }
 }
