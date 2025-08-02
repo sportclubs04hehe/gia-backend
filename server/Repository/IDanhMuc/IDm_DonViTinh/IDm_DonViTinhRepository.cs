@@ -1,5 +1,6 @@
 ﻿using server.Dtos.Common;
 using server.Models.DanhMuc;
+using System.Data;
 
 namespace server.Repository.IDanhMuc.IDm_DonViTinh
 {
@@ -9,9 +10,11 @@ namespace server.Repository.IDanhMuc.IDm_DonViTinh
         Task<IEnumerable<Dm_DonViTinh>> GetAllAsync();
         Task<Dm_DonViTinh?> GetByIdAsync(Guid id);
         Task<bool> IsCodeExistsAsync(string ma, Guid? excludeId = null);
-        Task<Dm_DonViTinh> CreateAsync(Dm_DonViTinh entity);
-        Task<bool> UpdateAsync(Dm_DonViTinh entity);
-        Task<bool> DeleteAsync(Guid id);
+        
+        // Bổ sung tham số transaction
+        Task<Dm_DonViTinh> CreateAsync(Dm_DonViTinh entity, IDbTransaction transaction = null);
+        Task<bool> UpdateAsync(Dm_DonViTinh entity, IDbTransaction transaction = null);
+        Task<bool> DeleteAsync(Guid id, IDbTransaction transaction = null);
         Task<IEnumerable<Dm_DonViTinh>> SearchAsync(string searchTerm);
     }
 }

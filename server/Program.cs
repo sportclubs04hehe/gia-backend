@@ -1,8 +1,6 @@
 using Npgsql;
-using server.Repository.IDanhMuc.IDm_DonViTinh;
-using server.Repository.IDanhMuc.IDm_HangHoaThiTruong;
-using server.Repository.Implement.DanhMucImpl.Dm_DonViTinhImpl;
-using server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl;
+using server.Repository.Implement;
+using server.Repository.UnitOfWork;
 using server.Service;
 using server.Service.Impl;
 using System.Data;
@@ -43,13 +41,9 @@ namespace server
             });
 
             // Đăng ký Repository và Service
-            builder.Services.AddScoped<IDm_DonViTinhRepository, Dm_DonViTinhRepository>();
-            builder.Services.AddScoped<IDm_DonViTinhImportExcel, Dm_DonViTinhImportExcelImpl>();
             builder.Services.AddScoped<IDm_DonViTinhService, Dm_DonViTinhService>();
             builder.Services.AddScoped<IDm_HangHoaThiTruongService, Dm_HangHoaThiTruongService>();
-            builder.Services.AddScoped<IDm_HangHoaThiTruongRepository, Dm_HangHoaThiTruongRepository>();
-            builder.Services.AddScoped<IDm_HangHoaThiTruongHierarchyRepository, Dm_HangHoaThiTruongHierarchyRepository>();
-            builder.Services.AddScoped<IDm_HangHoaThiTruongValidationRepository, Dm_HangHoaThiTruongValidationRepository>();
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();

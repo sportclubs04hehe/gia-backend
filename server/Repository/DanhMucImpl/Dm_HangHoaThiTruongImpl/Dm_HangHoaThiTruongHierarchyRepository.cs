@@ -2,7 +2,7 @@
 using server.Repository.IDanhMuc.IDm_HangHoaThiTruong;
 using System.Data;
 
-namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
+namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
 {
     public class Dm_HangHoaThiTruongHierarchyRepository : IDm_HangHoaThiTruongHierarchyRepository
     {

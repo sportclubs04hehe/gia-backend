@@ -2,25 +2,22 @@
 using Microsoft.Extensions.Logging;
 using server.Dtos.DanhMuc.Dm_HangHoaThiTruong;
 using server.Models.DanhMuc;
-using server.Repository.IDanhMuc.IDm_HangHoaThiTruong;
+using server.Repository.UnitOfWork;
 
 namespace server.Service.Impl
 {
     public class Dm_HangHoaThiTruongService : IDm_HangHoaThiTruongService
     {
-        private readonly IDm_HangHoaThiTruongRepository _repository;
-        private readonly IDm_HangHoaThiTruongValidationRepository _validationRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
         private readonly ILogger<Dm_HangHoaThiTruongService> _logger;
 
         public Dm_HangHoaThiTruongService(
-            IDm_HangHoaThiTruongRepository repository,
-            IDm_HangHoaThiTruongValidationRepository validationRepository,
+            IUnitOfWork unitOfWork,
             IMapper mapper,
             ILogger<Dm_HangHoaThiTruongService> logger)
         {
-            _repository = repository;
-            _validationRepository = validationRepository;
+            _unitOfWork = unitOfWork;
             _mapper = mapper;
             _logger = logger;
         }
@@ -35,10 +32,17 @@ namespace server.Service.Impl
                     throw new ArgumentException("Mã và tên không được để trống");
                 }
 
-                // Kiểm tra mã trùng lặp cùng cấp
-                bool isCodeExists = await _validationRepository.IsCodeExistsAtSameLevelAsync(createDto.Ma, createDto.ParentId);
+                // Bắt đầu transaction
+                await _unitOfWork.BeginTransactionAsync();
+                var transaction = _unitOfWork.CurrentTransaction;
+
+                // Kiểm tra mã trùng lặp cùng cấp sử dụng UnitOfWork
+                bool isCodeExists = await _unitOfWork.HangHoaThiTruongValidation
+                    .IsCodeExistsAtSameLevelAsync(createDto.Ma, createDto.ParentId);
+                
                 if (isCodeExists)
                 {
+                    await _unitOfWork.RollbackAsync();
                     throw new ArgumentException($"Mã '{createDto.Ma}' đã tồn tại ở cùng cấp độ");
                 }
 
@@ -46,14 +50,19 @@ namespace server.Service.Impl
                 var entity = _mapper.Map<Dm_HangHoaThiTruong>(createDto);
                 entity.IsDelete = false;
                 
-                // Thêm mới và lấy kết quả
-                var result = await _repository.AddAsync(entity, createDto.ParentId);
+                // Truyền transaction hiện tại vào phương thức AddAsync
+                var result = await _unitOfWork.HangHoaThiTruong.AddAsync(entity, createDto.ParentId, transaction);
+                
+                // Commit transaction nếu mọi thứ thành công
+                await _unitOfWork.CommitAsync();
                 
                 // Map kết quả sang DTO để trả về
                 return _mapper.Map<Dm_HangHoaThiTruongDto>(result);
             }
             catch (Exception ex)
             {
+                // Đảm bảo rollback transaction nếu có lỗi
+                await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi thêm mới hàng hóa thị trường");
                 throw;
             }
@@ -63,8 +72,8 @@ namespace server.Service.Impl
         {
             try
             {
-                // Gọi repository để lấy entity theo ID
-                var entity = await _repository.GetByIdAsync(id);
+                // Gọi repository thông qua UnitOfWork để lấy entity theo ID
+                var entity = await _unitOfWork.HangHoaThiTruong.GetByIdAsync(id);
 
                 // Nếu không tìm thấy, trả về null
                 if (entity == null)

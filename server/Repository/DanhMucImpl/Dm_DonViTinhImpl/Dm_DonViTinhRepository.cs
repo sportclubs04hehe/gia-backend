@@ -5,7 +5,7 @@ using System.Data;
 using System.Text;
 using server.Repository.IDanhMuc.IDm_DonViTinh;
 
-namespace server.Repository.Implement.DanhMucImpl.Dm_DonViTinhImpl
+namespace server.Repository.DanhMucImpl.Dm_DonViTinhImpl
 {
     public class Dm_DonViTinhRepository : IDm_DonViTinhRepository
     {
@@ -118,24 +118,30 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_DonViTinhImpl
         }
 
         //Thêm mới 1
-        public async Task<Dm_DonViTinh> CreateAsync(Dm_DonViTinh entity)
+        public async Task<Dm_DonViTinh> CreateAsync(Dm_DonViTinh entity, IDbTransaction transaction = null)
         {
             entity.Id = Guid.NewGuid();
             entity.CreatedDate = DateTime.Now;
             entity.IsDelete = false;
 
             var sql = @"INSERT INTO ""Dm_DonViTinh"" (""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""NgayHieuLuc"", ""NgayHetHieuLuc"", 
-                                                      ""CreatedBy"", ""CreatedDate"", ""IsDelete"")
+                                            ""CreatedBy"", ""CreatedDate"", ""IsDelete"")
                         VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc, @NgayHetHieuLuc, 
                                 @CreatedBy, @CreatedDate, @IsDelete)";
             
             _logger.LogInformation(sql);
-            await _dbConnection.ExecuteAsync(sql, entity);
+            
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+            
+            await _dbConnection.ExecuteAsync(sql, entity, transaction);
             return entity;
         }
 
         // Cập nhật 
-        public async Task<bool> UpdateAsync(Dm_DonViTinh entity)
+        public async Task<bool> UpdateAsync(Dm_DonViTinh entity, IDbTransaction transaction = null)
         {
             entity.ModifiedDate = DateTime.Now;
 
@@ -146,19 +152,31 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_DonViTinhImpl
                         WHERE ""Id"" = @Id AND ""IsDelete"" = false";
             
             _logger.LogInformation(sql);
-            var result = await _dbConnection.ExecuteAsync(sql, entity);
+            
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+            
+            var result = await _dbConnection.ExecuteAsync(sql, entity, transaction);
             return result > 0;
         }
 
         // Xóa bản  ghi
-        public async Task<bool> DeleteAsync(Guid id)
+        public async Task<bool> DeleteAsync(Guid id, IDbTransaction transaction = null)
         {
             var sql = @"UPDATE ""Dm_DonViTinh"" 
                         SET ""IsDelete"" = true, ""ModifiedDate"" = @ModifiedDate 
                         WHERE ""Id"" = @Id";
             
             _logger.LogInformation(sql);
-            var result = await _dbConnection.ExecuteAsync(sql, new { Id = id, ModifiedDate = DateTime.Now });
+            
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+            
+            var result = await _dbConnection.ExecuteAsync(sql, new { Id = id, ModifiedDate = DateTime.Now }, transaction);
             return result > 0;
         }
 

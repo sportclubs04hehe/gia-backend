@@ -197,6 +197,5 @@ namespace server.Controllers.DanhMuc
                 return StatusCode(500, $"Lỗi server: {ex.Message}");
             }
         }
-
     }
 }

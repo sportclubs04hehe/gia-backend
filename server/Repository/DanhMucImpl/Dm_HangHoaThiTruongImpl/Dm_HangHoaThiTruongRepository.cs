@@ -3,7 +3,7 @@ using server.Models.DanhMuc;
 using server.Repository.IDanhMuc.IDm_HangHoaThiTruong;
 using System.Data;
 
-namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
+namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
 {
     public class Dm_HangHoaThiTruongRepository : IDm_HangHoaThiTruongRepository
     {
@@ -20,7 +20,7 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
             _hierarchyRepository = hierarchyRepository;
         }
 
-        public async Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null)
+        public async Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null, IDbTransaction transaction = null)
         {
             // Đảm bảo entity có Id nếu chưa được set
             if (entity.Id == Guid.Empty)
@@ -41,27 +41,14 @@ namespace server.Repository.Implement.DanhMucImpl.Dm_HangHoaThiTruongImpl
                 _dbConnection.Open();
             }
 
-            using (var transaction = _dbConnection.BeginTransaction())
-            {
-                try
-                {
-                    // Thêm bản ghi vào bảng Dm_HangHoaThiTruong
-                    var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(
-                        insertSql, entity, transaction);
+            // Sử dụng transaction được truyền vào thay vì tạo mới
+            var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(
+                insertSql, entity, transaction);
 
-                    // Thêm mối quan hệ trong TreeClosure
-                    await _hierarchyRepository.UpdateTreeClosureAsync(entity.Id, parentId, transaction);
+            // Truyền cùng transaction vào hàm UpdateTreeClosureAsync
+            await _hierarchyRepository.UpdateTreeClosureAsync(entity.Id, parentId, transaction);
 
-                    transaction.Commit();
-                    return result;
-                }
-                catch (Exception ex)
-                {
-                    transaction.Rollback();
-                    _logger.LogError(ex, "Error adding Dm_HangHoaThiTruong");
-                    throw;
-                }
-            }
+            return result;
         }
 
         public async Task<Dm_HangHoaThiTruong?> GetByIdAsync(Guid id)
