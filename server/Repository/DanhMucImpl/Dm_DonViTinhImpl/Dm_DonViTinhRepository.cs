@@ -31,10 +31,53 @@ namespace server.Repository.DanhMucImpl.Dm_DonViTinhImpl
                 parameters.Add("SearchTerm", $"%{request.SearchTerm}%");
             }
 
-            // Xác định cột sắp xếp an toàn
-            var allowedSortColumns = new[] { "Ma", "Ten", "CreatedDate", "NgayHieuLuc" };
-            var sortColumn = allowedSortColumns.Contains(request.SortBy) ? request.SortBy : "CreatedDate";
+            // Xác định cột sắp xếp
+            var sortColumn = request.SortBy;
             var sortDirection = request.SortDescending ? "DESC" : "ASC";
+
+            // Tạo natural sort order cho các trường đặc biệt
+            string orderByClause;
+            if (sortColumn?.ToLower() == "ma")
+            {
+                // Natural sorting logic cho trường Ma
+                orderByClause = $@"
+                    CASE 
+                        -- Kiểm tra xem mã có phải là số không
+                        WHEN ""Ma"" ~ '^[0-9]+$' THEN 0
+                        -- Kiểm tra xem mã có phải là định dạng phân cấp số không
+                        WHEN ""Ma"" ~ '^[0-9]+\.[0-9.]+$' THEN 1
+                        -- Còn lại là text
+                        ELSE 2
+                    END {sortDirection},
+                    CASE 
+                        -- Với mã dạng số đơn giản: sắp xếp theo giá trị số
+                        WHEN ""Ma"" ~ '^[0-9]+$' THEN (""Ma"")::numeric
+                        ELSE 0
+                    END {sortDirection},
+                    CASE 
+                        -- Với mã dạng phân cấp số: split và sắp xếp từng phần
+                        WHEN ""Ma"" ~ '^[0-9]+\.[0-9.]+$' THEN 
+                            array_to_string(array(
+                                SELECT lpad(split_part(""Ma"", '.', generate_series(1, regexp_count(""Ma"", '\\.')+1))::text, 10, '0')
+                                FROM generate_series(1, regexp_count(""Ma"", '\\.')+1)
+                            ), '.')
+                        ELSE ""Ma""
+                    END {sortDirection},
+                    -- Cuối cùng sắp xếp các mã text theo thứ tự alphabet
+                    ""Ma"" {sortDirection}";
+            }
+            else if (sortColumn?.ToLower() == "ten")
+            {
+                // Special sorting for Ten column - without diacritics
+                orderByClause = $@"unaccent(LOWER(""Ten"")) {sortDirection}";
+            }
+            else
+            {
+                // Xác định cột sắp xếp an toàn
+                var allowedSortColumns = new[] { "CreatedDate", "NgayHieuLuc" };
+                sortColumn = allowedSortColumns.Contains(request.SortBy) ? request.SortBy : "CreatedDate";
+                orderByClause = $"\"{sortColumn}\" {sortDirection}";
+            }
 
             // Tính toán offset
             var offset = (request.PageNumber - 1) * request.PageSize;
@@ -43,6 +86,9 @@ namespace server.Repository.DanhMucImpl.Dm_DonViTinhImpl
 
             // Query để đếm tổng số bản ghi và lấy dữ liệu trong một lần truy vấn
             var sql = $@"
+                -- Đảm bảo extension unaccent được bật
+                CREATE EXTENSION IF NOT EXISTS unaccent;
+
                 -- Đếm tổng số bản ghi
                 SELECT COUNT(*) 
                 FROM ""Dm_DonViTinh"" 
@@ -50,10 +96,10 @@ namespace server.Repository.DanhMucImpl.Dm_DonViTinhImpl
 
                 -- Lấy dữ liệu phân trang
                 SELECT ""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""NgayHieuLuc"", ""NgayHetHieuLuc"", 
-                       ""CreatedBy"", ""CreatedDate"", ""ModifiedBy"", ""ModifiedDate"", ""IsDelete""
+                        ""CreatedBy"", ""CreatedDate"", ""ModifiedBy"", ""ModifiedDate"", ""IsDelete""
                 FROM ""Dm_DonViTinh"" 
                 {whereClause}
-                ORDER BY ""{sortColumn}"" {sortDirection}
+                ORDER BY {orderByClause}
                 LIMIT @PageSize OFFSET @Offset";
 
             _logger.LogInformation("Executing paged query: {Sql}", sql);
