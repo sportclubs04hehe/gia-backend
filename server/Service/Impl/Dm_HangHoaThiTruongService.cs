@@ -23,13 +23,22 @@ namespace server.Service.Impl
             _logger = logger;
         }
 
+        public async Task<IEnumerable<Dm_HangHoaThiTruongDto>> GetTopLevelItemsAsync()
+        {
+                // Get data from repository
+                var items = await _unitOfWork.HangHoaThiTruong.GetTopLevelItemsAsync();
+
+                // Map to DTOs
+                var result = _mapper.Map<IEnumerable<Dm_HangHoaThiTruongDto>>(items);
+
+                return result;
+        }
+
         public async Task<PagedResult<Dm_HangHoaThiTruongDto>> GetChildrenAsync(
             Guid parentId,
             PagedRequest request,
             string searchTerm = null)
         {
-            try
-            {
                 // Get data from repository
                 var result = await _unitOfWork.HangHoaThiTruong.GetChildrenAsync(
                     parentId,
@@ -47,12 +56,6 @@ namespace server.Service.Impl
                     PageNumber = result.PageNumber,
                     PageSize = result.PageSize
                 };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Lỗi khi lấy danh sách con của hàng hóa thị trường với ID: {parentId}");
-                throw;
-            }
         }
 
         public async Task<Dm_HangHoaThiTruongDto> CreateAsync(DmHangHoaThiTruongCreateDto createDto)
@@ -103,8 +106,6 @@ namespace server.Service.Impl
 
         public async Task<Dm_HangHoaThiTruongDto?> GetByIdAsync(Guid id)
         {
-            try
-            {
                 // Gọi repository thông qua UnitOfWork để lấy entity theo ID
                 var entity = await _unitOfWork.HangHoaThiTruong.GetByIdAsync(id);
 
@@ -114,12 +115,6 @@ namespace server.Service.Impl
 
                 // Map entity sang DTO và trả về
                 return _mapper.Map<Dm_HangHoaThiTruongDto>(entity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Lỗi khi lấy thông tin hàng hóa thị trường với ID: {id}");
-                throw;
-            }
         }
     }
 }

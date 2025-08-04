@@ -5,6 +5,7 @@ namespace server.Service
 {
     public interface IDm_HangHoaThiTruongService
     {
+        Task<IEnumerable<Dm_HangHoaThiTruongDto>> GetTopLevelItemsAsync();
         Task<Dm_HangHoaThiTruongDto> CreateAsync(DmHangHoaThiTruongCreateDto createDto);
         
         Task<Dm_HangHoaThiTruongDto?> GetByIdAsync(Guid id);

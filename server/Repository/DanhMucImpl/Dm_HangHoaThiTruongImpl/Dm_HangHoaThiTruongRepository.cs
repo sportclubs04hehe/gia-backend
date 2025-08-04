@@ -23,10 +23,50 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             _hierarchyRepository = hierarchyRepository;
         }
 
+        public async Task<IEnumerable<Dm_HangHoaThiTruongJoined>> GetTopLevelItemsAsync()
+        {
+            var sql = @"
+    SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"", 
+           h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
+           h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
+           h.""CreatedBy"", h.""ModifiedBy"",
+           NULL AS ""DonViTinhId"", 
+           NULL AS ""DonViTinhTen""
+    FROM ""Dm_HangHoaThiTruong"" h
+    WHERE h.""IsDelete"" = false
+    AND NOT EXISTS (
+        SELECT 1 FROM ""TreeClosure"" tc 
+        WHERE tc.""DescendantId"" = h.""Id"" 
+        AND tc.""AncestorId"" != h.""Id""
+        AND tc.""Depth"" > 0
+    )
+    ORDER BY 
+    CASE 
+        WHEN h.""Ma"" ~ '^[0-9]+$' THEN 0
+        WHEN h.""Ma"" ~ '^[0-9]+\.[0-9.]+$' THEN 1
+        ELSE 2
+    END,
+    CASE 
+        WHEN h.""Ma"" ~ '^[0-9]+$' THEN (h.""Ma"")::numeric
+        ELSE 0
+    END,
+    h.""Ma""";
+
+            _logger.LogInformation($"Execute SQL: {sql}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            var result = await _dbConnection.QueryAsync<Dm_HangHoaThiTruongJoined>(sql);
+            return result;
+        }
+
         public async Task<PagedResult<Dm_HangHoaThiTruongJoined>> GetChildrenAsync(
-    Guid parentId,
-    PagedRequest request,
-    string searchTerm = null)
+            Guid parentId,
+            PagedRequest request,
+            string searchTerm = null)
         {
             // Input validation
             if (request.PageNumber < 1)

@@ -21,6 +21,24 @@ namespace server.Controllers.DanhMuc
             _logger = logger;
         }
 
+        [HttpGet("top-level")]
+        public async Task<IActionResult> GetTopLevelItems()
+        {
+            try
+            {
+                // Call service method
+                var result = await _service.GetTopLevelItemsAsync();
+
+                // Return result
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi lấy danh sách mặt hàng cấp cao nhất");
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
+        }
+
         /// <summary>
         /// Lấy danh sách các hàng hóa con trực tiếp của một hàng hóa cha
         /// </summary>
