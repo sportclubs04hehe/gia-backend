@@ -20,6 +20,7 @@ namespace server.Repository.Implement
         private Lazy<IDm_HangHoaThiTruongRepository> _hangHoaThiTruongRepository;
         private Lazy<IDm_HangHoaThiTruongHierarchyRepository> _hangHoaThiTruongHierarchyRepository;
         private Lazy<IDm_HangHoaThiTruongValidationRepository> _hangHoaThiTruongValidationRepository;
+        private Lazy<IDm_HangHoaThiTruongImportExcel> _hangHoaThiTruongImportExcel;
         private Lazy<IDm_DonViTinhRepository> _donViTinhRepository;
         private Lazy<IDm_DonViTinhImportExcel> _donViTinhImportRepository;
 
@@ -57,12 +58,18 @@ namespace server.Repository.Implement
                 new Dm_DonViTinhImportExcelImpl(
                     _connection,
                     _loggerFactory.CreateLogger<Dm_DonViTinhImportExcelImpl>()));
+            
+            _hangHoaThiTruongImportExcel = new Lazy<IDm_HangHoaThiTruongImportExcel>(() =>
+                new Dm_HangHoaThiTruongImportExcelImpl(
+                    _connection,
+                    _loggerFactory.CreateLogger<Dm_HangHoaThiTruongImportExcelImpl>()));
         }
 
         // Repository properties with lazy initialization
         public IDm_HangHoaThiTruongRepository HangHoaThiTruong => _hangHoaThiTruongRepository.Value;
         public IDm_HangHoaThiTruongHierarchyRepository HangHoaThiTruongHierarchy => _hangHoaThiTruongHierarchyRepository.Value;
         public IDm_HangHoaThiTruongValidationRepository HangHoaThiTruongValidation => _hangHoaThiTruongValidationRepository.Value;
+        public IDm_HangHoaThiTruongImportExcel HangHoaThiTruongImportExcel => _hangHoaThiTruongImportExcel.Value;
         public IDm_DonViTinhRepository DonViTinh => _donViTinhRepository.Value;
         public IDm_DonViTinhImportExcel DonViTinhImport => _donViTinhImportRepository.Value;
 

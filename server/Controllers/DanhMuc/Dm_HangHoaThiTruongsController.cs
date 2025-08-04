@@ -228,5 +228,68 @@ namespace server.Controllers.DanhMuc
                 return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
             }
         }
+
+        /// <summary>
+        /// Kiểm tra dữ liệu Excel trước khi import
+        /// </summary>
+        /// <param name="file">File Excel cần kiểm tra</param>
+        /// <returns>Danh sách lỗi (nếu có)</returns>
+        [HttpPost("validate-excel")]
+        public async Task<IActionResult> ValidateExcel(IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest("Vui lòng chọn một file Excel để import");
+
+                string extension = Path.GetExtension(file.FileName).ToLower();
+                if (extension != ".xlsx" && extension != ".xls")
+                    return BadRequest("Chỉ chấp nhận file Excel (.xlsx hoặc .xls)");
+
+                var errors = await _service.ValidateExcelAsync(file);
+                
+                if (errors.Count == 0)
+                    return Ok(new { success = true, message = "Dữ liệu hợp lệ, sẵn sàng để import" });
+                
+                return Ok(new { success = false, errors });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi kiểm tra file Excel");
+                return StatusCode(500, "Đã xảy ra lỗi khi kiểm tra file Excel");
+            }
+        }
+
+        /// <summary>
+        /// Import dữ liệu từ file Excel
+        /// </summary>
+        /// <param name="file">File Excel cần import</param>
+        /// <returns>Kết quả import</returns>
+        [HttpPost("import-excel")]
+        public async Task<IActionResult> ImportExcel(IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest("Vui lòng chọn một file Excel để import");
+
+                string extension = Path.GetExtension(file.FileName).ToLower();
+                if (extension != ".xlsx" && extension != ".xls")
+                    return BadRequest("Chỉ chấp nhận file Excel (.xlsx hoặc .xls)");
+
+                var userName = User.Identity?.Name ?? "system";
+                var result = await _service.ImportFromExcelAsync(file, userName);
+                
+                if (result.ErrorCount > 0)
+                    return BadRequest(result);
+                
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi import file Excel");
+                return StatusCode(500, "Đã xảy ra lỗi khi import file Excel");
+            }
+        }
     }
 }

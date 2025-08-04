@@ -16,5 +16,7 @@ namespace server.Service
         Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto);
         Task<DeleteResult> DeleteAsync(Guid id);
         Task<DeleteResult> DeleteManyAsync(IEnumerable<Guid> ids);
+        Task<ImportResultDto> ImportFromExcelAsync(IFormFile file, string userName);
+        Task<List<ImportErrorDto>> ValidateExcelAsync(IFormFile file);
     }
 }

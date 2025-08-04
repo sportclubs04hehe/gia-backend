@@ -348,5 +348,68 @@ namespace server.Service.Impl
                 };
             }
         }
+
+        public async Task<ImportResultDto> ImportFromExcelAsync(IFormFile file, string userName)
+        {
+            try
+            {
+                // Start a transaction
+                await _unitOfWork.BeginTransactionAsync();
+                var transaction = _unitOfWork.CurrentTransaction;
+
+                // Process the import
+                var result = await _unitOfWork.HangHoaThiTruongImportExcel
+                    .ImportFromExcelAsync(file, userName, transaction);
+
+                // Handle success or failure
+                if (result.ErrorCount > 0)
+                {
+                    await _unitOfWork.RollbackAsync();
+                    return result;
+                }
+
+                await _unitOfWork.CommitAsync();
+                return result;
+            }
+            catch (Exception ex)
+            {
+                await _unitOfWork.RollbackAsync();
+                _logger.LogError(ex, "Error importing Excel data: {Message}", ex.Message);
+
+                return new ImportResultDto
+                {
+                    ErrorCount = 1,
+                    Errors = new List<ImportErrorDto>
+            {
+                new ImportErrorDto
+                {
+                    Row = 0,
+                    Message = $"Lỗi trong quá trình import: {ex.Message}"
+                }
+            }
+                };
+            }
+        }
+
+        public async Task<List<ImportErrorDto>> ValidateExcelAsync(IFormFile file)
+        {
+            try
+            {
+                return await _unitOfWork.HangHoaThiTruongImportExcel.ValidateExcelAsync(file);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating Excel data: {Message}", ex.Message);
+
+                return new List<ImportErrorDto>
+            {
+                new ImportErrorDto
+                {
+                    Row = 0,
+                    Message = $"Lỗi trong quá trình kiểm tra: {ex.Message}"
+                }
+            };
+            }
+        }
     }
 }

@@ -10,7 +10,8 @@ namespace server.Repository.UnitOfWork
         IDm_HangHoaThiTruongRepository HangHoaThiTruong { get; }
         IDm_HangHoaThiTruongHierarchyRepository HangHoaThiTruongHierarchy { get; }
         IDm_HangHoaThiTruongValidationRepository HangHoaThiTruongValidation { get; }
-        
+        IDm_HangHoaThiTruongImportExcel HangHoaThiTruongImportExcel { get; }
+
         IDm_DonViTinhRepository DonViTinh { get; }
         IDm_DonViTinhImportExcel DonViTinhImport { get; }
 
