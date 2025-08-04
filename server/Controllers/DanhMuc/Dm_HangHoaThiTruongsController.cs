@@ -176,5 +176,57 @@ namespace server.Controllers.DanhMuc
                 return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
             }
         }
+
+        /// <summary>
+        /// Xóa một hàng hóa thị trường và tất cả các hàng hóa con của nó
+        /// </summary>
+        /// <param name="id">ID của hàng hóa cần xóa</param>
+        /// <returns>Kết quả xóa</returns>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            try
+            {
+                // Gọi service để xóa
+                var result = await _service.DeleteAsync(id);
+                
+                // Trả về kết quả dựa theo trạng thái thành công
+                if (result.Success)
+                    return Ok(result);
+                else
+                    return BadRequest(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xóa hàng hóa thị trường với ID: {Id}", id);
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
+        }
+
+        /// <summary>
+        /// Xóa nhiều hàng hóa thị trường cùng lúc và tất cả các hàng hóa con của chúng
+        /// </summary>
+        /// <param name="ids">Danh sách ID các hàng hóa cần xóa</param>
+        /// <returns>Kết quả xóa</returns>
+        [HttpDelete("batch")]
+        public async Task<IActionResult> DeleteMany([FromBody] IEnumerable<Guid> ids)
+        {
+            try
+            {
+                // Gọi service để xóa nhiều
+                var result = await _service.DeleteManyAsync(ids);
+                
+                // Trả về kết quả dựa theo trạng thái thành công
+                if (result.Success)
+                    return Ok(result);
+                else
+                    return BadRequest(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xóa nhiều hàng hóa thị trường");
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
+        }
     }
 }

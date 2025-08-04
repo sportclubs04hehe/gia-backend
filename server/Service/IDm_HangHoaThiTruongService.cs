@@ -14,5 +14,7 @@ namespace server.Service
             PagedRequest request, 
             string searchTerm = null);
         Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto);
+        Task<DeleteResult> DeleteAsync(Guid id);
+        Task<DeleteResult> DeleteManyAsync(IEnumerable<Guid> ids);
     }
 }

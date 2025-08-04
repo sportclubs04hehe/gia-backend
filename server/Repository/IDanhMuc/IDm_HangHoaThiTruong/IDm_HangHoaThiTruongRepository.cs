@@ -23,5 +23,13 @@ namespace server.Repository.IDanhMuc.IDm_HangHoaThiTruong
         // Cập nhật một mặt hàng với cha mới (nếu có) và cập nhật cấu trúc cây
         Task<Dm_HangHoaThiTruong> UpdateAsync(Dm_HangHoaThiTruong entity, Guid? newParentId = null, IDbTransaction transaction = null);
 
+        // Xóa một mặt hàng
+        Task<int> DeleteAsync(Guid id, IDbTransaction? transaction = null);
+        // Xóa nhiều mặt hàng
+        Task<int> DeleteManyAsync(IEnumerable<Guid> ids, IDbTransaction? transaction = null);
+        // Kiểm tra xem mặt hàng có đang được tham chiếu ở nơi khác không
+        Task<bool> IsReferencedAsync(Guid id);
+        // Đếm số lượng mặt hàng con trực tiếp của một mặt hàng
+        Task<int> CountDescendantsAsync(Guid id);
     }
 }

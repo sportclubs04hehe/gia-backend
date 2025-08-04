@@ -1,6 +1,5 @@
 ﻿using Dapper;
 using server.Dtos.Common;
-using server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto;
 using server.Models.DanhMuc;
 using server.Models.Extends;
 using server.Repository.IDanhMuc.IDm_HangHoaThiTruong;
@@ -272,6 +271,118 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(sql, new { Id = id });
 
             return result;
+        }
+
+        // Xóa mềm một hàng hóa và tất cả các hàng hóa con của nó
+        public async Task<int> DeleteAsync(Guid id, IDbTransaction? transaction = null)
+        {
+            var sql = @"
+        WITH RECURSIVE TreeItems AS (
+            -- Lấy tất cả các node con (bao gồm cả node hiện tại)
+            SELECT tc.""DescendantId"" 
+            FROM ""TreeClosure"" tc
+            WHERE tc.""AncestorId"" = @Id
+        )
+        UPDATE ""Dm_HangHoaThiTruong""
+        SET ""IsDelete"" = true, 
+            ""ModifiedDate"" = NOW()
+        WHERE ""Id"" IN (SELECT ""DescendantId"" FROM TreeItems)
+        AND ""IsDelete"" = false;";
+
+            _logger.LogInformation($"Execute SQL: {sql} with Id: {id}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            var affectedRows = await _dbConnection.ExecuteAsync(
+                sql, 
+                new { Id = id }, 
+                transaction);
+                
+            return affectedRows;
+        }
+
+        // Xóa mềm nhiều hàng hóa và tất cả các hàng hóa con của chúng
+        public async Task<int> DeleteManyAsync(IEnumerable<Guid> ids, IDbTransaction? transaction = null)
+        {
+            if (ids == null || !ids.Any())
+                return 0;
+                
+            var sql = @"
+        WITH RECURSIVE AllItems AS (
+            -- Lấy tất cả các node con của các node được chọn
+            SELECT DISTINCT tc.""DescendantId"" 
+            FROM ""TreeClosure"" tc
+            WHERE tc.""AncestorId"" IN @Ids
+        )
+        UPDATE ""Dm_HangHoaThiTruong""
+        SET ""IsDelete"" = true, 
+            ""ModifiedDate"" = NOW()
+        WHERE ""Id"" IN (SELECT ""DescendantId"" FROM AllItems)
+        AND ""IsDelete"" = false;";
+
+            _logger.LogInformation($"Execute SQL: {sql} with Ids: {string.Join(", ", ids)}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            var affectedRows = await _dbConnection.ExecuteAsync(
+                sql, 
+                new { Ids = ids }, 
+                transaction);
+                
+            return affectedRows;
+        }
+
+        // Kiểm tra xem một hàng hóa có đang được sử dụng bởi các bảng khác không
+        public async Task<bool> IsReferencedAsync(Guid id)
+        {
+            // Kiểm tra tham chiếu trong các bảng khác
+            var sql = @"
+        -- Kiểm tra xem hàng hóa có được tham chiếu trong bảng khác không
+        -- Ví dụ: Kiểm tra trong bảng đơn hàng, chi tiết đơn hàng, v.v.
+        -- Thay thế bằng các bảng thực tế trong hệ thống của bạn
+        SELECT EXISTS (
+            SELECT 1 
+            FROM -- Thay thế bằng tên bảng thực tế, ví dụ: ""ChiTietDonHang""
+            WHERE ""HangHoaThiTruongId"" = @Id
+            LIMIT 1
+        );";
+
+            _logger.LogInformation($"Execute SQL: {sql} with Id: {id}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+            
+            // Nếu không có bảng tham chiếu thì luôn trả về false
+            // return await _dbConnection.ExecuteScalarAsync<bool>(sql, new { Id = id });
+            
+            // Tạm thời trả về false vì chưa có các bảng tham chiếu cụ thể
+            return false;
+        }
+
+        // Đếm số lượng node con trực tiếp và gián tiếp của một node
+        public async Task<int> CountDescendantsAsync(Guid id)
+        {
+            var sql = @"
+        SELECT COUNT(*) - 1 -- Trừ đi chính node hiện tại
+        FROM ""TreeClosure"" tc
+        WHERE tc.""AncestorId"" = @Id";
+
+            _logger.LogInformation($"Execute SQL: {sql} with Id: {id}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            return await _dbConnection.ExecuteScalarAsync<int>(sql, new { Id = id });
         }
     }
 }
