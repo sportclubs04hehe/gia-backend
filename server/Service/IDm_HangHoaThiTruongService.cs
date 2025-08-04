@@ -13,5 +13,6 @@ namespace server.Service
             Guid parentId, 
             PagedRequest request, 
             string searchTerm = null);
+        Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto);
     }
 }

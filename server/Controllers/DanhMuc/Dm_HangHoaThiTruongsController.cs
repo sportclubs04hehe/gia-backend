@@ -132,5 +132,49 @@ namespace server.Controllers.DanhMuc
                 return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
             }
         }
+
+        /// <summary>
+        /// Cập nhật thông tin hàng hóa thị trường
+        /// </summary>
+        /// <param name="id">ID của hàng hóa thị trường cần cập nhật</param>
+        /// <param name="updateDto">Thông tin cập nhật</param>
+        /// <returns>Thông tin hàng hóa thị trường sau khi cập nhật</returns>
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] DmHangHoaThiTruongUpdateDto updateDto)
+        {
+            try
+            {
+                // Check if ID in route matches ID in DTO
+                if (id != updateDto.Id)
+                {
+                    return BadRequest("ID trong URL không khớp với ID trong dữ liệu");
+                }
+
+                // Validate model state
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                // Call service to update
+                var result = await _service.UpdateAsync(updateDto);
+                
+                // Return updated entity
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Không tìm thấy hàng hóa thị trường với ID: {Id}", id);
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Lỗi dữ liệu đầu vào khi cập nhật hàng hóa thị trường");
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi cập nhật hàng hóa thị trường");
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
+        }
     }
 }

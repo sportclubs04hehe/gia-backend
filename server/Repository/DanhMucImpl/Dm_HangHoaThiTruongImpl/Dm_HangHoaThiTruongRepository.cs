@@ -23,6 +23,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             _hierarchyRepository = hierarchyRepository;
         }
 
+        // Lấy danh sách các hàng hóa cấp cao nhất (không có cha)
         public async Task<IEnumerable<Dm_HangHoaThiTruongJoined>> GetTopLevelItemsAsync()
         {
             var sql = @"
@@ -63,6 +64,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             return result;
         }
 
+        // Lấy danh sách các hàng hóa con trực tiếp của một hàng hóa cha
         public async Task<PagedResult<Dm_HangHoaThiTruongJoined>> GetChildrenAsync(
             Guid parentId,
             PagedRequest request,
@@ -184,6 +186,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             };
         }
 
+        // Thêm mới hàng hóa với khả năng thiết lập cha mới
         public async Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null, IDbTransaction transaction = null)
         {
             // Đảm bảo entity có Id nếu chưa được set
@@ -215,6 +218,44 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             return result;
         }
 
+        // Cập nhật hàng hóa với khả năng thay đổi cha mới
+        public async Task<Dm_HangHoaThiTruong> UpdateAsync(Dm_HangHoaThiTruong entity, Guid? newParentId = null, IDbTransaction transaction = null)
+        {
+            // SQL to update the entity with proper double quotes for PostgreSQL
+            var updateSql = @"
+        UPDATE ""Dm_HangHoaThiTruong""
+        SET ""Ma"" = @Ma, 
+            ""Ten"" = @Ten, 
+            ""GhiChu"" = @GhiChu, 
+            ""DacTinh"" = @DacTinh,
+            ""DonViTinhId"" = @DonViTinhId,
+            ""NgayHieuLuc"" = @NgayHieuLuc, 
+            ""NgayHetHieuLuc"" = @NgayHetHieuLuc,
+            ""ModifiedDate"" = NOW(),
+            ""ModifiedBy"" = @ModifiedBy
+        WHERE ""Id"" = @Id AND ""IsDelete"" = false
+        RETURNING *;";
+
+            _logger.LogInformation($"Execute SQL: {updateSql} with parameters: {System.Text.Json.JsonSerializer.Serialize(entity)}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(
+                updateSql, entity, transaction);
+
+            if (result != null && newParentId.HasValue)
+            {
+                // Update the hierarchical structure if parent has changed
+                await _hierarchyRepository.UpdateParentAsync(entity.Id, newParentId.Value, transaction);
+            }
+
+            return result;
+        }
+
+        // Lấy hàng hóa theo Id
         public async Task<Dm_HangHoaThiTruong?> GetByIdAsync(Guid id)
         {
             var sql = @"
@@ -232,6 +273,5 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
 
             return result;
         }
-
     }
 }

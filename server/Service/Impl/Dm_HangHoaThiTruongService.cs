@@ -116,5 +116,61 @@ namespace server.Service.Impl
                 // Map entity sang DTO và trả về
                 return _mapper.Map<Dm_HangHoaThiTruongDto>(entity);
         }
+
+        public async Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto)
+        {
+            try
+            {
+                // Kiểm tra dữ liệu đầu vào
+                if (string.IsNullOrWhiteSpace(updateDto.Ma) || string.IsNullOrWhiteSpace(updateDto.Ten))
+                {
+                    throw new ArgumentException("Mã và tên không được để trống");
+                }
+
+                // Kiểm tra sự tồn tại của bản ghi
+                var existingEntity = await _unitOfWork.HangHoaThiTruong.GetByIdAsync(updateDto.Id);
+                if (existingEntity == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy hàng hóa thị trường với ID: {updateDto.Id}");
+                }
+
+                // Bắt đầu transaction
+                await _unitOfWork.BeginTransactionAsync();
+                var transaction = _unitOfWork.CurrentTransaction;
+
+                // Kiểm tra mã trùng lặp cùng cấp, sử dụng phương thức IsCodeExistsAtSameLevelAsync thay vì IsCodeExistsForUpdateAsync
+                // Truyền ID hiện tại vào tham số excludeId để loại trừ chính bản ghi đang cập nhật
+                bool isCodeExists = await _unitOfWork.HangHoaThiTruongValidation
+                    .IsCodeExistsAtSameLevelAsync(updateDto.Ma, updateDto.ParentId, updateDto.Id);
+                
+                if (isCodeExists)
+                {
+                    await _unitOfWork.RollbackAsync();
+                    throw new ArgumentException($"Mã '{updateDto.Ma}' đã tồn tại ở cùng cấp độ");
+                }
+
+                // Chuyển đổi từ DTO sang entity, giữ nguyên một số trường
+                var entity = _mapper.Map<Dm_HangHoaThiTruong>(updateDto);
+                entity.IsDelete = false;
+                entity.CreatedBy = existingEntity.CreatedBy;
+                entity.CreatedDate = existingEntity.CreatedDate;
+                
+                // Cập nhật entity và xử lý thay đổi parent nếu có
+                var result = await _unitOfWork.HangHoaThiTruong.UpdateAsync(entity, updateDto.ParentId, transaction);
+                
+                // Commit transaction nếu mọi thao tác thành công
+                await _unitOfWork.CommitAsync();
+                
+                // Chuyển đổi kết quả về DTO
+                return _mapper.Map<Dm_HangHoaThiTruongDto>(result);
+            }
+            catch (Exception ex)
+            {
+                // Đảm bảo rollback transaction khi xảy ra lỗi
+                await _unitOfWork.RollbackAsync();
+                _logger.LogError(ex, "Lỗi khi cập nhật hàng hóa thị trường: {Message}", ex.Message);
+                throw;
+            }
+        }
     }
 }

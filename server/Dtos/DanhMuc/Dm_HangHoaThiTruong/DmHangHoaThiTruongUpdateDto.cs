@@ -11,8 +11,7 @@ namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
         public string Ten { get; set; }
         public string? GhiChu { get; set; }
         public string? DacTinh { get; set; }
-        [Required(ErrorMessage = "Đơn vị tính không được để trống.")]
-        public Guid DonViTinhId { get; set; }
+        public Guid? DonViTinhId { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
         public Guid? ParentId { get; set; } // Cho phép thay đổi node cha

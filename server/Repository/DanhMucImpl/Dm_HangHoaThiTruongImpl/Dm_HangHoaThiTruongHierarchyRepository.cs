@@ -42,5 +42,72 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                     transaction);
             }
         }
+
+        public async Task UpdateParentAsync(Guid nodeId, Guid newParentId, IDbTransaction transaction = null)
+        {
+            // Bước 1: Kiểm tra xem nút cha mới có phải là con cháu của nút đó không (sẽ tạo ra một chu trình)
+            var checkCycleSql = @"
+                SELECT COUNT(*) FROM ""TreeClosure"" 
+                WHERE ""AncestorId"" = @NodeId AND ""DescendantId"" = @NewParentId";
+    
+            var cycleCount = await _dbConnection.ExecuteScalarAsync<int>(
+                checkCycleSql, 
+                new { NodeId = nodeId, NewParentId = newParentId },
+                transaction);
+    
+            if (cycleCount > 0)
+            {
+                throw new InvalidOperationException("Cannot move a node to its own descendant - would create a cycle");
+            }
+
+            // Bước 2: Lấy nút cha hiện tại của nút
+            var getCurrentParentSql = @"
+                SELECT tc.""AncestorId"" FROM ""TreeClosure"" tc
+                WHERE tc.""DescendantId"" = @NodeId AND tc.""Depth"" = 1";
+    
+            var currentParent = await _dbConnection.QueryFirstOrDefaultAsync<Guid?>(
+                getCurrentParentSql,
+                new { NodeId = nodeId },
+                transaction);
+
+            // Nếu cha mẹ không thay đổi, không còn gì để làm nữa
+            if (currentParent == newParentId)
+            {
+                return;
+            }
+
+            // Bước 3: Xóa các mối quan hệ đóng cây hiện có
+            // Xóa tất cả các mục nhập mà nút hoặc các nút con của nó được kết nối với nút tổ tiên
+            var deleteRelationshipsSql = @"
+                DELETE FROM ""TreeClosure""
+                WHERE (""DescendantId"" IN (
+                        SELECT d.""DescendantId"" FROM ""TreeClosure"" d
+                        WHERE d.""AncestorId"" = @NodeId
+                    ))
+                AND (""AncestorId"" IN (
+                        SELECT a.""AncestorId"" FROM ""TreeClosure"" a
+                        WHERE a.""DescendantId"" = @NodeId AND a.""AncestorId"" != a.""DescendantId""
+                    ));";
+
+            await _dbConnection.ExecuteAsync(
+                deleteRelationshipsSql,
+                new { NodeId = nodeId },
+                transaction);
+
+            // Bước 4: Tạo các mối quan hệ đóng cây mới
+            // Đối với mỗi tổ tiên của nút cha mới, hãy kết nối nó với nút và tất cả các nút con của nó
+            var insertNewRelationshipsSql = @"
+                INSERT INTO ""TreeClosure"" (""AncestorId"", ""DescendantId"", ""Depth"")
+                SELECT a.""AncestorId"", d.""DescendantId"", a.""Depth"" + d.""Depth"" + 1
+                FROM ""TreeClosure"" a
+                CROSS JOIN ""TreeClosure"" d
+                WHERE a.""DescendantId"" = @NewParentId
+                AND d.""AncestorId"" = @NodeId;";
+
+            await _dbConnection.ExecuteAsync(
+                insertNewRelationshipsSql,
+                new { NodeId = nodeId, NewParentId = newParentId },
+                transaction);
+        }
     }
 }
