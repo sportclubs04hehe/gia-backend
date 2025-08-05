@@ -378,6 +378,57 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             Dictionary<string, Guid> processedIds,
             IDbTransaction transaction)
         {
+            // First, collect any new DonViTinh that need to be created
+            var newUnitNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
+            foreach (var item in batch)
+            {
+                if (!string.IsNullOrEmpty(item.DonViTinh) && 
+                    !donViTinhMap.ContainsKey(item.DonViTinh.ToLower()))
+                {
+                    newUnitNames.Add(item.DonViTinh.Trim());
+                }
+            }
+
+            // Create and insert new DonViTinh records if needed
+            if (newUnitNames.Any())
+            {
+                var newUnits = new List<Dm_DonViTinh>();
+                foreach (var unitName in newUnitNames)
+                {
+                    var unitId = Guid.NewGuid();
+                    newUnits.Add(new Dm_DonViTinh
+                    {
+                        Id = unitId,
+                        Ma = GenerateUnitCode(unitName),  // Implement a method to generate codes
+                        Ten = unitName,
+                        NgayHieuLuc = DateTime.Now,
+                        NgayHetHieuLuc = DateTime.Now.AddYears(10),
+                        IsDelete = false,
+                        CreatedBy = createdBy,
+                        CreatedDate = DateTime.Now,
+                        ModifiedBy = createdBy,
+                        ModifiedDate = DateTime.Now
+                    });
+                    
+                    // Add to the map for use with this batch
+                    donViTinhMap[unitName.ToLower()] = unitId;
+                }
+
+                // Insert the new units into the database
+                var insertUnitSql = @"
+INSERT INTO ""Dm_DonViTinh"" (""Id"", ""Ma"", ""Ten"", ""GhiChu"", 
+                           ""NgayHieuLuc"", ""NgayHetHieuLuc"",
+                           ""IsDelete"", ""CreatedBy"", ""CreatedDate"", 
+                           ""ModifiedBy"", ""ModifiedDate"")
+VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc, 
+        @NgayHetHieuLuc, @IsDelete,
+        @CreatedBy, @CreatedDate, @ModifiedBy, @ModifiedDate)";
+
+                _logger.LogInformation("Creating {Count} new DonViTinh records", newUnits.Count);
+                await _dbConnection.ExecuteAsync(insertUnitSql, newUnits, transaction);
+            }
+            
             // First, create all entities and insert them
             var entitiesToInsert = new List<(Dm_HangHoaThiTruong Entity, Guid? ParentId)>();
             var idMappings = new Dictionary<string, Guid>();
@@ -498,6 +549,50 @@ WHERE tc.""DescendantId"" = @ParentId AND tc.""AncestorId"" != @ParentId";
                     new { DescendantId = rel.DescendantId, ParentId = rel.AncestorId },
                     transaction);
             }
+        }
+
+        // Tạo đơn vị tính tự động
+        // Tạo đơn vị tính tự động
+        private string GenerateUnitCode(string unitName)
+        {
+            if (string.IsNullOrWhiteSpace(unitName))
+                return "DVT01";
+
+            // Remove diacritics (Vietnamese accents)
+            string normalized = RemoveDiacritics(unitName);
+
+            // Remove special characters and spaces, keep only letters and numbers
+            string cleaned = new string(normalized
+                .Where(c => char.IsLetterOrDigit(c))
+                .ToArray())
+                .ToUpper();
+
+            // If no valid characters, use default
+            if (string.IsNullOrEmpty(cleaned))
+                return "DVT01";
+
+            // Take maximum 5 characters
+            string code = cleaned.Length > 5 ? cleaned.Substring(0, 5) : cleaned;
+
+            return code;
+        }
+
+        // Helper method to remove Vietnamese diacritics
+        private string RemoveDiacritics(string text)
+        {
+            var normalizedString = text.Normalize(NormalizationForm.FormD);
+            var stringBuilder = new StringBuilder();
+
+            foreach (var c in normalizedString)
+            {
+                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+                if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+                {
+                    stringBuilder.Append(c);
+                }
+            }
+
+            return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
         }
 
         private async Task<List<ImportErrorDto>> ValidateItemsAsync(
