@@ -11,5 +11,6 @@
         public string? DonViTinhTen { get; set; } 
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
+        public bool HasChildren { get; set; }
     }
 }

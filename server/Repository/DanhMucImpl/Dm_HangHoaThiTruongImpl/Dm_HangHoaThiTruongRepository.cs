@@ -30,9 +30,20 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
            h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
            h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
            h.""CreatedBy"", h.""ModifiedBy"",
-           NULL AS ""DonViTinhId"", 
-           NULL AS ""DonViTinhTen""
+           h.""DonViTinhId"",
+           dvt.""Ten"" AS ""DonViTinhTen"",
+           CASE WHEN EXISTS (
+               SELECT 1 FROM ""TreeClosure"" tc 
+               WHERE tc.""AncestorId"" = h.""Id"" 
+               AND tc.""Depth"" = 1
+               AND EXISTS (
+                   SELECT 1 FROM ""Dm_HangHoaThiTruong"" child
+                   WHERE child.""Id"" = tc.""DescendantId""
+                   AND child.""IsDelete"" = false
+               )
+           ) THEN true ELSE false END AS ""HasChildren""
     FROM ""Dm_HangHoaThiTruong"" h
+    LEFT JOIN ""Dm_DonViTinh"" dvt ON dvt.""Id"" = h.""DonViTinhId"" AND dvt.""IsDelete"" = false
     WHERE h.""IsDelete"" = false
     AND NOT EXISTS (
         SELECT 1 FROM ""TreeClosure"" tc 
@@ -151,12 +162,22 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
     AND h.""IsDelete"" = false
     {searchCondition};
 
-    -- Get paged data with unit name
+    -- Get paged data with unit name and hasChildren info
     SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"", 
            h.""DonViTinhId"", h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
            h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
            h.""CreatedBy"", h.""ModifiedBy"",
-           dvt.""Ten"" AS ""DonViTinhTen""
+           dvt.""Ten"" AS ""DonViTinhTen"",
+           CASE WHEN EXISTS (
+               SELECT 1 FROM ""TreeClosure"" tc_child 
+               WHERE tc_child.""AncestorId"" = h.""Id"" 
+               AND tc_child.""Depth"" = 1
+               AND EXISTS (
+                   SELECT 1 FROM ""Dm_HangHoaThiTruong"" child
+                   WHERE child.""Id"" = tc_child.""DescendantId""
+                   AND child.""IsDelete"" = false
+               )
+           ) THEN true ELSE false END AS ""HasChildren""
     FROM ""Dm_HangHoaThiTruong"" h
     JOIN ""TreeClosure"" tc ON tc.""DescendantId"" = h.""Id""
     LEFT JOIN ""Dm_DonViTinh"" dvt ON dvt.""Id"" = h.""DonViTinhId"" AND dvt.""IsDelete"" = false
