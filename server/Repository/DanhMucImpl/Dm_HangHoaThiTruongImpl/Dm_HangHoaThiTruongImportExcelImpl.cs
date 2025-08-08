@@ -155,44 +155,39 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         }
 
         private async Task ProcessImportInBatchesAsync(
-            List<HangHoaThiTruongImportDto> items,
-            Dictionary<string, Guid> donViTinhMap,
-            string createdBy,
-            IDbTransaction transaction)
+    List<HangHoaThiTruongImportDto> items,
+    Dictionary<string, Guid> donViTinhMap,
+    string createdBy,
+    IDbTransaction transaction)
         {
             // First build the dependency order
             var processOrder = BuildProcessingOrder(items);
 
             // Track processed items for parent resolution
-            var processedIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var processedIds = new Dictionary<string, Guid>();
 
-            // Get existing parents in one query - optimize by filtering distinct non-null values
-            var parentCodes = items
-                .Where(i => !string.IsNullOrWhiteSpace(i.ParentCode))
-                .Select(i => i.ParentCode!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray(); // ToArray for better performance
-
-            if (parentCodes.Length > 0)
+            // Get existing parents in one query
+            var parentCodes = items.Where(i => !string.IsNullOrEmpty(i.ParentCode))
+                                  .Select(i => i.ParentCode)
+                                  .Distinct()
+                                  .ToList();
+            if (parentCodes.Any())
             {
                 var existingParentSql = @"SELECT ""Id"", ""Ma"" FROM ""Dm_HangHoaThiTruong"" 
                           WHERE ""Ma"" = ANY(@Codes) AND ""IsDelete"" = false";
 
-                _logger.LogInformation("Executing SQL: {Sql} with {Count} parent codes", 
-                    existingParentSql, parentCodes.Length);
+                _logger.LogInformation("Executing SQL: {Sql} with params: {@Params}",
+            existingParentSql, new { Codes = parentCodes.ToArray() });
 
                 var existingParents = await _dbConnection.QueryAsync<(Guid Id, string Ma)>(
                     existingParentSql,
-                    new { Codes = parentCodes },
+                    new { Codes = parentCodes.ToArray() }, // Sửa thành ToArray()
                     transaction);
 
                 foreach (var parent in existingParents)
                 {
                     processedIds[parent.Ma] = parent.Id;
                 }
-
-                _logger.LogInformation("Found {Found} existing parents out of {Total} requested", 
-                    processedIds.Count, parentCodes.Length);
             }
 
             // Define batch size
@@ -309,8 +304,6 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                     };
 
                     items.Add(item);
-
-                    items.Add(item);
                 }
             }
             catch (Exception ex)
@@ -376,9 +369,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             // Case 3: Value is a string that needs to be parsed
-            string? dateString = value?.ToString()?.Trim();
-            if (string.IsNullOrEmpty(dateString))
-                return null;
+            string dateString = value.ToString().Trim();
 
             // Try parsing with invariant culture (yyyy-MM-dd)
             if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture,
@@ -549,7 +540,7 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId,
                 .Where(e => e.ParentId.HasValue)
                 .Select(e => new
                 {
-                    AncestorId = e.ParentId!.Value, // Safe because of HasValue check above
+                    AncestorId = e.ParentId.Value,
                     DescendantId = e.Entity.Id
                 })
                 .ToList();
@@ -667,7 +658,7 @@ WHERE tc.""DescendantId"" = @ParentId AND tc.""AncestorId"" != @ParentId";
             // Log which parent codes were found in the database
             foreach (var parentCode in uniqueParentCodes)
             {
-                if (!string.IsNullOrEmpty(parentCode) && parentCodesMap.ContainsKey(parentCode))
+                if (parentCodesMap.ContainsKey(parentCode))
                     _logger.LogInformation("Parent code {Code} exists in database with ID {Id}", parentCode, parentCodesMap[parentCode]);
                 else
                     _logger.LogInformation("Parent code {Code} does not exist in database yet", parentCode);
@@ -893,17 +884,12 @@ AND (
         private List<HangHoaThiTruongImportDto> BuildProcessingOrder(List<HangHoaThiTruongImportDto> items)
         {
             // Build dependency graph
-            var dependencyGraph = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var dependencyGraph = new Dictionary<string, List<string>>();
 
             // Sử dụng GroupBy để xử lý các mã trùng lặp, chỉ lấy item đầu tiên của mỗi mã
             var itemsMap = items
                 .GroupBy(i => i.Ma, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-            // Tạo map để tránh LINQ trong loop
-            var itemsByCode = items
-                .GroupBy(i => i.Ma, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
             _logger.LogInformation("Building processing order for {TotalItems} items, {UniqueItems} unique codes",
                 items.Count, itemsMap.Count);
@@ -941,15 +927,15 @@ AND (
 
             // Trả về tất cả items gốc nhưng theo thứ tự đã được sắp xếp
             // Đối với các mã trùng lặp, chúng sẽ được xử lý theo thứ tự xuất hiện
-            var orderedItems = new List<HangHoaThiTruongImportDto>(items.Count);
+            var orderedItems = new List<HangHoaThiTruongImportDto>();
             var processedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var orderedItem in result)
             {
-                // Sử dụng pre-built map thay vì LINQ
-                if (itemsByCode.TryGetValue(orderedItem.Ma, out var sameCodeItems))
+                var sameCodeItems = items.Where(i => i.Ma.Equals(orderedItem.Ma, StringComparison.OrdinalIgnoreCase));
+                foreach (var item in sameCodeItems)
                 {
-                    orderedItems.AddRange(sameCodeItems);
+                    orderedItems.Add(item);
                 }
                 processedCodes.Add(orderedItem.Ma);
             }
@@ -963,10 +949,8 @@ AND (
                 }
             }
 
-            _logger.LogInformation("Processing order built: {ProcessedCount} items", orderedItems.Count);
             return orderedItems;
         }
-
         private void TopologicalSort(
             string code,
             Dictionary<string, List<string>> graph,
