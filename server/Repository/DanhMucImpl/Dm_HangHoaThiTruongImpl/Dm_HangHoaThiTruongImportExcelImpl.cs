@@ -155,39 +155,44 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         }
 
         private async Task ProcessImportInBatchesAsync(
-    List<HangHoaThiTruongImportDto> items,
-    Dictionary<string, Guid> donViTinhMap,
-    string createdBy,
-    IDbTransaction transaction)
+            List<HangHoaThiTruongImportDto> items,
+            Dictionary<string, Guid> donViTinhMap,
+            string createdBy,
+            IDbTransaction transaction)
         {
             // First build the dependency order
             var processOrder = BuildProcessingOrder(items);
 
             // Track processed items for parent resolution
-            var processedIds = new Dictionary<string, Guid>();
+            var processedIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
-            // Get existing parents in one query
-            var parentCodes = items.Where(i => !string.IsNullOrEmpty(i.ParentCode))
-                                  .Select(i => i.ParentCode)
-                                  .Distinct()
-                                  .ToList();
-            if (parentCodes.Any())
+            // Get existing parents in one query - optimize by filtering distinct non-null values
+            var parentCodes = items
+                .Where(i => !string.IsNullOrWhiteSpace(i.ParentCode))
+                .Select(i => i.ParentCode!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(); // ToArray for better performance
+
+            if (parentCodes.Length > 0)
             {
                 var existingParentSql = @"SELECT ""Id"", ""Ma"" FROM ""Dm_HangHoaThiTruong"" 
                           WHERE ""Ma"" = ANY(@Codes) AND ""IsDelete"" = false";
 
-                _logger.LogInformation("Executing SQL: {Sql} with params: {@Params}",
-            existingParentSql, new { Codes = parentCodes.ToArray() });
+                _logger.LogInformation("Executing SQL: {Sql} with {Count} parent codes", 
+                    existingParentSql, parentCodes.Length);
 
                 var existingParents = await _dbConnection.QueryAsync<(Guid Id, string Ma)>(
                     existingParentSql,
-                    new { Codes = parentCodes.ToArray() }, // Sửa thành ToArray()
+                    new { Codes = parentCodes },
                     transaction);
 
                 foreach (var parent in existingParents)
                 {
                     processedIds[parent.Ma] = parent.Id;
                 }
+
+                _logger.LogInformation("Found {Found} existing parents out of {Total} requested", 
+                    processedIds.Count, parentCodes.Length);
             }
 
             // Define batch size
@@ -239,7 +244,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                 var columnNames = new List<string>();
                 foreach (DataColumn column in dataTable.Columns)
                 {
-                    columnNames.Add($"'{column.ColumnName}'");
+                    columnNames.Add($"'{column.ColumnName}' (Length: {column.ColumnName.Length})");
                 }
                 _logger.LogInformation("Các cột tìm thấy trong file Excel: {0}", string.Join(", ", columnNames));
 
@@ -247,25 +252,34 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                 var columnMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (DataColumn column in dataTable.Columns)
                 {
-                    // Normalize tên cột (loại bỏ khoảng trắng đầu/cuối và dấu BOM nếu có)
-                    var normalizedName = column.ColumnName.Trim();
+                    // Normalize tên cột - loại bỏ BOM, khoảng trắng và ký tự đặc biệt
+                    var normalizedName = NormalizeColumnName(column.ColumnName);
                     columnMap[normalizedName] = column.ColumnName;
+
+                    _logger.LogInformation("Mapped column: '{0}' -> '{1}'", normalizedName, column.ColumnName);
                 }
 
                 // Check required columns using the normalized map
                 var requiredColumns = new[] { "Mã", "Tên" };
+                var missingColumns = new List<string>();
+
                 foreach (var column in requiredColumns)
                 {
                     if (!columnMap.ContainsKey(column))
                     {
-                        result.Errors.Add(new ImportErrorDto
-                        {
-                            Row = 0,
-                            Message = $"Cột bắt buộc '{column}' không tồn tại trong file Excel"
-                        });
-                        result.ErrorCount = 1;
-                        return items;
+                        missingColumns.Add(column);
                     }
+                }
+
+                if (missingColumns.Any())
+                {
+                    result.Errors.Add(new ImportErrorDto
+                    {
+                        Row = 0,
+                        Message = $"Thiếu các cột bắt buộc: {string.Join(", ", missingColumns)}. Vui lòng kiểm tra mẫu file import."
+                    });
+                    result.ErrorCount = 1;
+                    return items;
                 }
 
                 // Parse each row
@@ -285,14 +299,16 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                     {
                         Ma = row[maColumnName]?.ToString()?.Trim() ?? string.Empty,
                         Ten = row[tenColumnName]?.ToString()?.Trim() ?? string.Empty,
-                        ParentCode = GetSafeColumnValue(row, columnMap.ContainsKey("Mã cha") ? columnMap["Mã cha"] : "Mã cha"),
-                        DonViTinh = GetSafeColumnValue(row, columnMap.ContainsKey("Tên Đơn Vị Tính") ? columnMap["Tên Đơn Vị Tính"] : "Tên Đơn Vị Tính"),
-                        GhiChu = GetSafeColumnValue(row, columnMap.ContainsKey("Ghi Chú") ? columnMap["Ghi Chú"] : "Ghi Chú"),
-                        DacTinh = GetSafeColumnValue(row, columnMap.ContainsKey("Đặc Tính") ? columnMap["Đặc Tính"] : "Đặc Tính"),
-                        NgayHieuLuc = TryParseExcelDate(row, columnMap.ContainsKey("Ngày Hiệu Lực") ? columnMap["Ngày Hiệu Lực"] : "Ngày Hiệu Lực"),
-                        NgayHetHieuLuc = TryParseExcelDate(row, columnMap.ContainsKey("Ngày Hết Hiệu Lực") ? columnMap["Ngày Hết Hiệu Lực"] : "Ngày Hết Hiệu Lực"),
+                        ParentCode = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Mã cha", "Mã cha")),
+                        DonViTinh = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Tên Đơn Vị Tính", "Tên Đơn Vị Tính")),
+                        GhiChu = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Ghi Chú", "Ghi Chú")),
+                        DacTinh = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Đặc Tính", "Đặc Tính")),
+                        NgayHieuLuc = TryParseExcelDate(row, columnMap.GetValueOrDefault("Ngày Hiệu Lực", "Ngày Hiệu Lực")),
+                        NgayHetHieuLuc = TryParseExcelDate(row, columnMap.GetValueOrDefault("Ngày Hết Hiệu Lực", "Ngày Hết Hiệu Lực")),
                         RowIndex = i + 2
                     };
+
+                    items.Add(item);
 
                     items.Add(item);
                 }
@@ -308,6 +324,22 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             return items;
+        }
+
+        // Thêm phương thức helper để normalize column name
+        private string NormalizeColumnName(string columnName)
+        {
+            if (string.IsNullOrEmpty(columnName))
+                return string.Empty;
+
+            // Loại bỏ BOM và các ký tự đặc biệt
+            var normalized = columnName
+                .Replace("\uFEFF", "") // BOM UTF-8
+                .Replace("\u200B", "") // Zero-width space
+                .Replace("\u00A0", " ") // Non-breaking space
+                .Trim();
+
+            return normalized;
         }
 
         private string? GetSafeColumnValue(DataRow row, string columnName)
@@ -344,7 +376,9 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             // Case 3: Value is a string that needs to be parsed
-            string dateString = value.ToString().Trim();
+            string? dateString = value?.ToString()?.Trim();
+            if (string.IsNullOrEmpty(dateString))
+                return null;
 
             // Try parsing with invariant culture (yyyy-MM-dd)
             if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture,
@@ -380,10 +414,10 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         {
             // First, collect any new DonViTinh that need to be created
             var newUnitNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            
+
             foreach (var item in batch)
             {
-                if (!string.IsNullOrEmpty(item.DonViTinh) && 
+                if (!string.IsNullOrEmpty(item.DonViTinh) &&
                     !donViTinhMap.ContainsKey(item.DonViTinh.ToLower()))
                 {
                     newUnitNames.Add(item.DonViTinh.Trim());
@@ -410,7 +444,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                         ModifiedBy = createdBy,
                         ModifiedDate = DateTime.Now
                     });
-                    
+
                     // Add to the map for use with this batch
                     donViTinhMap[unitName.ToLower()] = unitId;
                 }
@@ -428,7 +462,7 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc,
                 _logger.LogInformation("Creating {Count} new DonViTinh records", newUnits.Count);
                 await _dbConnection.ExecuteAsync(insertUnitSql, newUnits, transaction);
             }
-            
+
             // First, create all entities and insert them
             var entitiesToInsert = new List<(Dm_HangHoaThiTruong Entity, Guid? ParentId)>();
             var idMappings = new Dictionary<string, Guid>();
@@ -515,7 +549,7 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId,
                 .Where(e => e.ParentId.HasValue)
                 .Select(e => new
                 {
-                    AncestorId = e.ParentId.Value,
+                    AncestorId = e.ParentId!.Value, // Safe because of HasValue check above
                     DescendantId = e.Entity.Id
                 })
                 .ToList();
@@ -633,7 +667,7 @@ WHERE tc.""DescendantId"" = @ParentId AND tc.""AncestorId"" != @ParentId";
             // Log which parent codes were found in the database
             foreach (var parentCode in uniqueParentCodes)
             {
-                if (parentCodesMap.ContainsKey(parentCode))
+                if (!string.IsNullOrEmpty(parentCode) && parentCodesMap.ContainsKey(parentCode))
                     _logger.LogInformation("Parent code {Code} exists in database with ID {Id}", parentCode, parentCodesMap[parentCode]);
                 else
                     _logger.LogInformation("Parent code {Code} does not exist in database yet", parentCode);
@@ -859,10 +893,22 @@ AND (
         private List<HangHoaThiTruongImportDto> BuildProcessingOrder(List<HangHoaThiTruongImportDto> items)
         {
             // Build dependency graph
-            var dependencyGraph = new Dictionary<string, List<string>>();
-            var itemsMap = items.ToDictionary(i => i.Ma);
+            var dependencyGraph = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var item in items)
+            // Sử dụng GroupBy để xử lý các mã trùng lặp, chỉ lấy item đầu tiên của mỗi mã
+            var itemsMap = items
+                .GroupBy(i => i.Ma, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            // Tạo map để tránh LINQ trong loop
+            var itemsByCode = items
+                .GroupBy(i => i.Ma, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            _logger.LogInformation("Building processing order for {TotalItems} items, {UniqueItems} unique codes",
+                items.Count, itemsMap.Count);
+
+            foreach (var item in itemsMap.Values)
             {
                 if (!dependencyGraph.ContainsKey(item.Ma))
                 {
@@ -882,10 +928,10 @@ AND (
 
             // Topological sort (process parents before children)
             var result = new List<HangHoaThiTruongImportDto>();
-            var visited = new HashSet<string>();
-            var temp = new HashSet<string>();
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var temp = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var item in items)
+            foreach (var item in itemsMap.Values)
             {
                 if (!visited.Contains(item.Ma))
                 {
@@ -893,7 +939,32 @@ AND (
                 }
             }
 
-            return result;
+            // Trả về tất cả items gốc nhưng theo thứ tự đã được sắp xếp
+            // Đối với các mã trùng lặp, chúng sẽ được xử lý theo thứ tự xuất hiện
+            var orderedItems = new List<HangHoaThiTruongImportDto>(items.Count);
+            var processedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var orderedItem in result)
+            {
+                // Sử dụng pre-built map thay vì LINQ
+                if (itemsByCode.TryGetValue(orderedItem.Ma, out var sameCodeItems))
+                {
+                    orderedItems.AddRange(sameCodeItems);
+                }
+                processedCodes.Add(orderedItem.Ma);
+            }
+
+            // Thêm bất kỳ items nào không được xử lý (nếu có)
+            foreach (var item in items)
+            {
+                if (!processedCodes.Contains(item.Ma))
+                {
+                    orderedItems.Add(item);
+                }
+            }
+
+            _logger.LogInformation("Processing order built: {ProcessedCount} items", orderedItems.Count);
+            return orderedItems;
         }
 
         private void TopologicalSort(
