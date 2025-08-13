@@ -6,15 +6,16 @@
     public class Dm_HangHoaThiTruongTreeDto
     {
         public Guid Id { get; set; }
-        public string Ma { get; set; } = null!;
-        public string Ten { get; set; } = null!;
+        public string Ma { get; set; } = string.Empty;
+        public string Ten { get; set; } = string.Empty;
         public string? GhiChu { get; set; }
-        public string? DacTinh { get; set; }
-        public Guid? DonViTinhId { get; set; }
-        public string? DonViTinhTen { get; set; }
-        public int Depth { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
+        public bool HasChildren { get; set; }
+        public DateTime? CreatedDate { get; set; }
+        public DateTime? ModifiedDate { get; set; }
+        public string? CreatedBy { get; set; }
+        public string? ModifiedBy { get; set; }
         public List<Dm_HangHoaThiTruongTreeDto> Children { get; set; } = new List<Dm_HangHoaThiTruongTreeDto>();
     }
 }

@@ -40,6 +40,25 @@ namespace server.Controllers.DanhMuc
             }
         }
 
+        /// <returns>Danh sách các mặt hàng cha dạng cây</returns>
+        [HttpGet("all-parents")]
+        public async Task<IActionResult> GetAllParentItems()
+        {
+            try
+            {
+                // Call service method
+                var result = await _service.GetAllParentItemsAsync();
+
+                // Return result
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi lấy danh sách tất cả mặt hàng cha");
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
+        }
+
         /// Lấy danh sách các hàng hóa con trực tiếp của một hàng hóa cha
         [HttpGet("children/{parentId}")]
         public async Task<IActionResult> GetChildren(

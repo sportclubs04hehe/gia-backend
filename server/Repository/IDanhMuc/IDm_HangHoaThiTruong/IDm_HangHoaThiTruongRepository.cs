@@ -31,5 +31,7 @@ namespace server.Repository.IDanhMuc.IDm_HangHoaThiTruong
         Task<bool> IsReferencedAsync(Guid id);
         // Đếm số lượng mặt hàng con trực tiếp của một mặt hàng
         Task<int> CountDescendantsAsync(Guid id);
+        /// <returns>Danh sách các mặt hàng cha và con</returns>
+        Task<IEnumerable<Dm_HangHoaThiTruongJoined>> GetAllParentItemsWithChildrenAsync();
     }
 }

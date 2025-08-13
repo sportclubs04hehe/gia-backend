@@ -26,32 +26,33 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         public async Task<IEnumerable<Dm_HangHoaThiTruongJoined>> GetTopLevelItemsAsync()
         {
             var sql = @"
-    SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"", 
-           h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
-           h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
-           h.""CreatedBy"", h.""ModifiedBy"",
-           h.""DonViTinhId"",
-           dvt.""Ten"" AS ""DonViTinhTen"",
-           CASE WHEN EXISTS (
-               SELECT 1 FROM ""TreeClosure"" tc 
-               WHERE tc.""AncestorId"" = h.""Id"" 
-               AND tc.""Depth"" = 1
-               AND EXISTS (
-                   SELECT 1 FROM ""Dm_HangHoaThiTruong"" child
-                   WHERE child.""Id"" = tc.""DescendantId""
+SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"", 
+       h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
+       h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
+       h.""CreatedBy"", h.""ModifiedBy"",
+       h.""DonViTinhId"",
+       CASE WHEN EXISTS (
+           SELECT 1 
+           FROM ""TreeClosure"" tc 
+           WHERE tc.""AncestorId"" = h.""Id"" 
+             AND tc.""Depth"" = 1
+             AND EXISTS (
+                 SELECT 1 
+                 FROM ""Dm_HangHoaThiTruong"" child
+                 WHERE child.""Id"" = tc.""DescendantId""
                    AND child.""IsDelete"" = false
-               )
-           ) THEN true ELSE false END AS ""HasChildren""
-    FROM ""Dm_HangHoaThiTruong"" h
-    LEFT JOIN ""Dm_DonViTinh"" dvt ON dvt.""Id"" = h.""DonViTinhId"" AND dvt.""IsDelete"" = false
-    WHERE h.""IsDelete"" = false
-    AND NOT EXISTS (
-        SELECT 1 FROM ""TreeClosure"" tc 
-        WHERE tc.""DescendantId"" = h.""Id"" 
+             )
+       ) THEN true ELSE false END AS ""HasChildren""
+FROM ""Dm_HangHoaThiTruong"" h
+WHERE h.""IsDelete"" = false
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM ""TreeClosure"" tc 
+      WHERE tc.""DescendantId"" = h.""Id"" 
         AND tc.""AncestorId"" != h.""Id""
         AND tc.""Depth"" > 0
-    )
-    ORDER BY 
+  )
+ORDER BY 
     CASE 
         WHEN h.""Ma"" ~ '^[0-9]+$' THEN 0
         WHEN h.""Ma"" ~ '^[0-9]+\.[0-9.]+$' THEN 1
@@ -61,17 +62,62 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         WHEN h.""Ma"" ~ '^[0-9]+$' THEN (h.""Ma"")::numeric
         ELSE 0
     END,
-    h.""Ma""";
+    h.""Ma"";
+";
 
             _logger.LogInformation($"Execute SQL: {sql}");
 
             if (_dbConnection.State != ConnectionState.Open)
-            {
                 _dbConnection.Open();
-            }
 
-            var result = await _dbConnection.QueryAsync<Dm_HangHoaThiTruongJoined>(sql);
-            return result;
+            return await _dbConnection.QueryAsync<Dm_HangHoaThiTruongJoined>(sql);
+        }
+
+
+        public async Task<IEnumerable<Dm_HangHoaThiTruongJoined>> GetAllParentItemsWithChildrenAsync()
+        {
+            var sql = @"
+WITH ParentNodes AS (
+    SELECT DISTINCT tc.""AncestorId""
+    FROM ""TreeClosure"" tc
+    JOIN ""Dm_HangHoaThiTruong"" child 
+        ON child.""Id"" = tc.""DescendantId"" 
+       AND child.""IsDelete"" = false
+    WHERE tc.""Depth"" = 1
+)
+SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"",
+       h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
+       h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
+       h.""CreatedBy"", h.""ModifiedBy"",
+       CASE WHEN p.""AncestorId"" IS NOT NULL THEN true ELSE false END AS ""HasChildren"",
+       tc_parent.""AncestorId"" AS ""ParentId"",
+       tc_parent.""Depth""
+FROM ""Dm_HangHoaThiTruong"" h
+LEFT JOIN ""TreeClosure"" tc_parent 
+       ON tc_parent.""DescendantId"" = h.""Id"" AND tc_parent.""Depth"" = 1
+LEFT JOIN ParentNodes p ON p.""AncestorId"" = h.""Id""
+WHERE h.""IsDelete"" = false
+  AND p.""AncestorId"" IS NOT NULL
+ORDER BY 
+    CASE 
+        WHEN h.""Ma"" ~ '^[0-9]+$' THEN 0
+        WHEN h.""Ma"" ~ '^[0-9]+\.[0-9.]+$' THEN 1
+        ELSE 2
+    END,
+    CASE 
+        WHEN h.""Ma"" ~ '^[0-9]+$' THEN (h.""Ma"")::numeric
+        ELSE 0
+    END,
+    h.""Ma"";
+";
+
+            _logger.LogInformation($"Execute SQL: {sql}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+                _dbConnection.Open();
+
+            var result = await _dbConnection.QueryAsync<Dm_HangHoaThiTruongJoinedWithParent>(sql);
+            return result.Cast<Dm_HangHoaThiTruongJoined>();
         }
 
         // Lấy danh sách các hàng hóa con trực tiếp của một hàng hóa cha
@@ -318,10 +364,10 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             var affectedRows = await _dbConnection.ExecuteAsync(
-                sql, 
-                new { Id = id }, 
+                sql,
+                new { Id = id },
                 transaction);
-                
+
             return affectedRows;
         }
 
@@ -330,7 +376,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         {
             if (ids == null || !ids.Any())
                 return 0;
-                
+
             var sql = @"
         WITH RECURSIVE AllItems AS (
             -- Lấy tất cả các node con của các node được chọn
@@ -352,10 +398,10 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             var affectedRows = await _dbConnection.ExecuteAsync(
-                sql, 
-                new { Ids = ids }, 
+                sql,
+                new { Ids = ids },
                 transaction);
-                
+
             return affectedRows;
         }
 
@@ -380,10 +426,10 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             {
                 _dbConnection.Open();
             }
-            
+
             // Nếu không có bảng tham chiếu thì luôn trả về false
             // return await _dbConnection.ExecuteScalarAsync<bool>(sql, new { Id = id });
-            
+
             // Tạm thời trả về false vì chưa có các bảng tham chiếu cụ thể
             return false;
         }

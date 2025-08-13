@@ -19,5 +19,7 @@ namespace server.Service
         Task<DeleteResult> DeleteManyAsync(IEnumerable<Guid> ids);
         Task<ImportResultDto> ImportFromExcelAsync(IFormFile file, string userName);
         Task<List<ImportErrorDto>> ValidateExcelAsync(IFormFile file);
+        /// <returns>Danh sách các mặt hàng cha dạng cây</returns>
+        Task<IEnumerable<Dm_HangHoaThiTruongTreeDto>> GetAllParentItemsAsync();
     }
 }

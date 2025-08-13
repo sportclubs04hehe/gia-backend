@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using server.Dtos.Common;
 using server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto;
 using server.Models.DanhMuc;
+using server.Models.Extends;
 using server.Repository.UnitOfWork;
 
 namespace server.Service.Impl
@@ -25,13 +26,13 @@ namespace server.Service.Impl
 
         public async Task<IEnumerable<Dm_HangHoaThiTruongDto>> GetTopLevelItemsAsync()
         {
-                // Get data from repository
-                var items = await _unitOfWork.HangHoaThiTruong.GetTopLevelItemsAsync();
+            // Get data from repository
+            var items = await _unitOfWork.HangHoaThiTruong.GetTopLevelItemsAsync();
 
-                // Map to DTOs
-                var result = _mapper.Map<IEnumerable<Dm_HangHoaThiTruongDto>>(items);
+            // Map to DTOs
+            var result = _mapper.Map<IEnumerable<Dm_HangHoaThiTruongDto>>(items);
 
-                return result;
+            return result;
         }
 
         public async Task<PagedResult<Dm_HangHoaThiTruongDto>> GetChildrenAsync(
@@ -39,23 +40,23 @@ namespace server.Service.Impl
             PagedRequest request,
             string searchTerm = null)
         {
-                // Get data from repository
-                var result = await _unitOfWork.HangHoaThiTruong.GetChildrenAsync(
-                    parentId,
-                    request,
-                    searchTerm);
+            // Get data from repository
+            var result = await _unitOfWork.HangHoaThiTruong.GetChildrenAsync(
+                parentId,
+                request,
+                searchTerm);
 
-                // Map to DTOs
-                var items = _mapper.Map<IEnumerable<Dm_HangHoaThiTruongDto>>(result.Items);
+            // Map to DTOs
+            var items = _mapper.Map<IEnumerable<Dm_HangHoaThiTruongDto>>(result.Items);
 
-                // Return paged result with mapped items
-                return new PagedResult<Dm_HangHoaThiTruongDto>
-                {
-                    Items = items,
-                    TotalCount = result.TotalCount,
-                    PageNumber = result.PageNumber,
-                    PageSize = result.PageSize
-                };
+            // Return paged result with mapped items
+            return new PagedResult<Dm_HangHoaThiTruongDto>
+            {
+                Items = items,
+                TotalCount = result.TotalCount,
+                PageNumber = result.PageNumber,
+                PageSize = result.PageSize
+            };
         }
 
         public async Task<Dm_HangHoaThiTruongDto> CreateAsync(DmHangHoaThiTruongCreateDto createDto)
@@ -75,7 +76,7 @@ namespace server.Service.Impl
                 // Kiểm tra mã trùng lặp cùng cấp sử dụng UnitOfWork
                 bool isCodeExists = await _unitOfWork.HangHoaThiTruongValidation
                     .IsCodeExistsAtSameLevelAsync(createDto.Ma, createDto.ParentId);
-                
+
                 if (isCodeExists)
                 {
                     await _unitOfWork.RollbackAsync();
@@ -85,13 +86,13 @@ namespace server.Service.Impl
                 // Map từ DTO sang entity
                 var entity = _mapper.Map<Dm_HangHoaThiTruong>(createDto);
                 entity.IsDelete = false;
-                
+
                 // Truyền transaction hiện tại vào phương thức AddAsync
                 var result = await _unitOfWork.HangHoaThiTruong.AddAsync(entity, createDto.ParentId, transaction);
-                
+
                 // Commit transaction nếu mọi thứ thành công
                 await _unitOfWork.CommitAsync();
-                
+
                 // Map kết quả sang DTO để trả về
                 return _mapper.Map<Dm_HangHoaThiTruongDto>(result);
             }
@@ -106,28 +107,28 @@ namespace server.Service.Impl
 
         public async Task<Dm_HangHoaThiTruongDto?> GetByIdAsync(Guid id)
         {
-                // Gọi repository thông qua UnitOfWork để lấy entity theo ID
-                var entity = await _unitOfWork.HangHoaThiTruong.GetByIdAsync(id);
+            // Gọi repository thông qua UnitOfWork để lấy entity theo ID
+            var entity = await _unitOfWork.HangHoaThiTruong.GetByIdAsync(id);
 
-                // Nếu không tìm thấy, trả về null
-                if (entity == null)
-                    return null;
+            // Nếu không tìm thấy, trả về null
+            if (entity == null)
+                return null;
 
-                // Map entity sang DTO và trả về
-                return _mapper.Map<Dm_HangHoaThiTruongDto>(entity);
+            // Map entity sang DTO và trả về
+            return _mapper.Map<Dm_HangHoaThiTruongDto>(entity);
         }
 
         public async Task<bool> CheckCodeExistsAsync(string code, Guid? parentId = null, Guid? excludeId = null)
         {
-                if (string.IsNullOrWhiteSpace(code))
-                {
-                    throw new ArgumentException("Mã không được để trống");
-                }
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                throw new ArgumentException("Mã không được để trống");
+            }
 
-                var exists = await _unitOfWork.HangHoaThiTruongValidation
-                    .IsCodeExistsAtSameLevelAsync(code, parentId, excludeId);
+            var exists = await _unitOfWork.HangHoaThiTruongValidation
+                .IsCodeExistsAtSameLevelAsync(code, parentId, excludeId);
 
-                return exists;
+            return exists;
         }
 
         public async Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto)
@@ -155,7 +156,7 @@ namespace server.Service.Impl
                 // Truyền ID hiện tại vào tham số excludeId để loại trừ chính bản ghi đang cập nhật
                 bool isCodeExists = await _unitOfWork.HangHoaThiTruongValidation
                     .IsCodeExistsAtSameLevelAsync(updateDto.Ma, updateDto.ParentId, updateDto.Id);
-                
+
                 if (isCodeExists)
                 {
                     await _unitOfWork.RollbackAsync();
@@ -167,13 +168,13 @@ namespace server.Service.Impl
                 entity.IsDelete = false;
                 entity.CreatedBy = existingEntity.CreatedBy;
                 entity.CreatedDate = existingEntity.CreatedDate;
-                
+
                 // Cập nhật entity và xử lý thay đổi parent nếu có
                 var result = await _unitOfWork.HangHoaThiTruong.UpdateAsync(entity, updateDto.ParentId, transaction);
-                
+
                 // Commit transaction nếu mọi thao tác thành công
                 await _unitOfWork.CommitAsync();
-                
+
                 // Chuyển đổi kết quả về DTO
                 return _mapper.Map<Dm_HangHoaThiTruongDto>(result);
             }
@@ -249,7 +250,7 @@ namespace server.Service.Impl
                 // Đảm bảo rollback transaction khi xảy ra lỗi
                 await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi xóa hàng hóa thị trường: {Message}", ex.Message);
-                
+
                 return new DeleteResult
                 {
                     Success = false,
@@ -330,12 +331,12 @@ namespace server.Service.Impl
 
                 // Tạo thông báo kết quả
                 string resultMessage = $"Đã xóa {validIds.Count} hàng hóa và các hàng hóa con của chúng.";
-                
+
                 if (notFoundIds.Any())
                 {
                     resultMessage += $" {notFoundIds.Count} hàng hóa không tìm thấy.";
                 }
-                
+
                 if (referencedItems.Any())
                 {
                     resultMessage += $" {referencedItems.Count} hàng hóa không thể xóa do đang được sử dụng.";
@@ -353,7 +354,7 @@ namespace server.Service.Impl
                 // Đảm bảo rollback transaction khi xảy ra lỗi
                 await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi xóa nhiều hàng hóa thị trường: {Message}", ex.Message);
-                
+
                 return new DeleteResult
                 {
                     Success = false,
@@ -423,6 +424,54 @@ namespace server.Service.Impl
                 }
             };
             }
+        }
+
+        public async Task<IEnumerable<Dm_HangHoaThiTruongTreeDto>> GetAllParentItemsAsync()
+        {
+            // Get data from repository - chỉ lấy những mặt hàng là cha (có con)
+            var items = await _unitOfWork.HangHoaThiTruong.GetAllParentItemsWithChildrenAsync();
+            
+            // Cast to items with parent info
+            var itemsWithParent = items.Cast<Dm_HangHoaThiTruongJoinedWithParent>().ToList();
+
+            // Map to DTOs
+            var dtoItems = _mapper.Map<List<Dm_HangHoaThiTruongTreeDto>>(itemsWithParent);
+
+            // Build tree structure - chỉ với những mặt hàng cha
+            var result = BuildTreeStructure(dtoItems, itemsWithParent);
+
+            return result;
+        }
+
+        private List<Dm_HangHoaThiTruongTreeDto> BuildTreeStructure(
+            List<Dm_HangHoaThiTruongTreeDto> dtoItems, 
+            List<Dm_HangHoaThiTruongJoinedWithParent> itemsWithParent)
+        {
+            // Create a dictionary for quick lookup
+            var itemDict = dtoItems.ToDictionary(x => x.Id, x => x);
+            var parentLookup = itemsWithParent.ToDictionary(x => x.Id, x => x.ParentId);
+
+            // Find root items (parent items without parent in current list)
+            var rootItems = new List<Dm_HangHoaThiTruongTreeDto>();
+
+            foreach (var item in dtoItems)
+            {
+                var parentId = parentLookup.GetValueOrDefault(item.Id);
+                
+                if (parentId == null || !itemDict.ContainsKey(parentId.Value))
+                {
+                    // This is a root parent item
+                    rootItems.Add(item);
+                }
+                else
+                {
+                    // This is a child parent item, add to its parent's children
+                    var parent = itemDict[parentId.Value];
+                    parent.Children.Add(item);
+                }
+            }
+
+            return rootItems;
         }
     }
 }
