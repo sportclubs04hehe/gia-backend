@@ -290,17 +290,27 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                         string.IsNullOrWhiteSpace(row[tenColumnName]?.ToString()))
                         continue;
 
+                    // Normalize and validate Mã
+                    var rawMa = row[maColumnName]?.ToString()?.Trim() ?? string.Empty;
+                    var normalizedMa = NormalizeAndValidateCode(rawMa);
+
+                    // Normalize and validate ParentCode if exists
+                    var rawParentCode = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Mã cha", "Mã cha"));
+                    var normalizedParentCode = string.IsNullOrWhiteSpace(rawParentCode) ? null : NormalizeAndValidateCode(rawParentCode);
+
                     var item = new HangHoaThiTruongImportDto
                     {
-                        Ma = row[maColumnName]?.ToString()?.Trim() ?? string.Empty,
+                        Ma = normalizedMa,
                         Ten = row[tenColumnName]?.ToString()?.Trim() ?? string.Empty,
-                        ParentCode = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Mã cha", "Mã cha")),
+                        ParentCode = normalizedParentCode,
                         DonViTinh = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Tên Đơn Vị Tính", "Tên Đơn Vị Tính")),
                         GhiChu = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Ghi Chú", "Ghi Chú")),
                         DacTinh = GetSafeColumnValue(row, columnMap.GetValueOrDefault("Đặc Tính", "Đặc Tính")),
                         NgayHieuLuc = TryParseExcelDate(row, columnMap.GetValueOrDefault("Ngày Hiệu Lực", "Ngày Hiệu Lực")),
                         NgayHetHieuLuc = TryParseExcelDate(row, columnMap.GetValueOrDefault("Ngày Hết Hiệu Lực", "Ngày Hết Hiệu Lực")),
-                        RowIndex = i + 2
+                        RowIndex = i + 2,
+                        OriginalMa = rawMa, // Lưu mã gốc để hiển thị trong error
+                        OriginalParentCode = rawParentCode // Lưu mã cha gốc để hiển thị trong error
                     };
 
                     items.Add(item);
@@ -317,6 +327,19 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             return items;
+        }
+
+        private string NormalizeAndValidateCode(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return string.Empty;
+
+            // Xóa dấu cách và chỉ giữ lại chữ, số, gạch ngang
+            var normalizedCode = new string(code
+                .Where(c => char.IsLetterOrDigit(c) || c == '-')
+                .ToArray());
+
+            return normalizedCode;
         }
 
         // Thêm phương thức helper để normalize column name
@@ -753,11 +776,37 @@ AND (
                     hasError = true;
                     error.ColumnErrors["Mã"] = "Mã không được để trống";
                 }
+                else
+                {
+                    // Validate code format - kiểm tra mã gốc có ký tự không hợp lệ
+                    if (!string.IsNullOrWhiteSpace(item.OriginalMa) && item.OriginalMa != item.Ma)
+                    {
+                        var invalidChars = item.OriginalMa.Where(c => !char.IsLetterOrDigit(c) && c != '-' && c != '.').Distinct();
+                        if (invalidChars.Any())
+                        {
+                            hasError = true;
+                            error.ColumnErrors["Mã"] = $"Mã '{item.OriginalMa}' chứa ký tự không hợp lệ: {string.Join(", ", invalidChars.Select(c => $"'{c}'"))}. Chỉ cho phép chữ, số, gạch ngang (-) và dấu chấm (.). Mã đã được tự động sửa thành: '{item.Ma}'";
+                        }
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(item.Ten))
                 {
                     hasError = true;
                     error.ColumnErrors["Tên"] = "Tên không được để trống";
+                }
+
+                // Validate ParentCode format if exists
+                if (!string.IsNullOrWhiteSpace(item.ParentCode) &&
+                    !string.IsNullOrWhiteSpace(item.OriginalParentCode) &&
+                    item.OriginalParentCode != item.ParentCode)
+                {
+                    var invalidChars = item.OriginalParentCode.Where(c => !char.IsLetterOrDigit(c) && c != '-' && c != '.').Distinct();
+                    if (invalidChars.Any())
+                    {
+                        hasError = true;
+                        error.ColumnErrors["Mã cha"] = $"Mã cha '{item.OriginalParentCode}' chứa ký tự không hợp lệ: {string.Join(", ", invalidChars.Select(c => $"'{c}'"))}. Chỉ cho phép chữ, số, gạch ngang (-) và dấu chấm (.). Mã cha đã được tự động sửa thành: '{item.ParentCode}'";
+                    }
                 }
 
                 // Date validation (keep existing code)
