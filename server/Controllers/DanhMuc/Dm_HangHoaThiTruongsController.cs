@@ -21,6 +21,7 @@ namespace server.Controllers.DanhMuc
             _logger = logger;
         }
 
+        // Lấy các mặt hàng cấp cao nhất (không có cha)
         [HttpGet("top-level")]
         public async Task<IActionResult> GetTopLevelItems()
         {
@@ -39,16 +40,7 @@ namespace server.Controllers.DanhMuc
             }
         }
 
-        /// <summary>
         /// Lấy danh sách các hàng hóa con trực tiếp của một hàng hóa cha
-        /// </summary>
-        /// <param name="parentId">ID của hàng hóa cha</param>
-        /// <param name="pageNumber">Số trang (mặc định: 1)</param>
-        /// <param name="pageSize">Kích thước trang (mặc định: 10)</param>
-        /// <param name="sortBy">Sắp xếp theo trường (mặc định: CreatedDate)</param>
-        /// <param name="sortDescending">Sắp xếp giảm dần (mặc định: false)</param>
-        /// <param name="searchTerm">Từ khóa tìm kiếm (tùy chọn)</param>
-        /// <returns>Danh sách các hàng hóa con với phân trang</returns>
         [HttpGet("children/{parentId}")]
         public async Task<IActionResult> GetChildren(
             Guid parentId,
@@ -133,13 +125,45 @@ namespace server.Controllers.DanhMuc
             }
         }
 
-        /// <summary>
-        /// Cập nhật thông tin hàng hóa thị trường
-        /// </summary>
-        /// <param name="id">ID của hàng hóa thị trường cần cập nhật</param>
-        /// <param name="updateDto">Thông tin cập nhật</param>
-        /// <returns>Thông tin hàng hóa thị trường sau khi cập nhật</returns>
-        [HttpPut("{id}")]
+        // Kiểm tra mã hàng hóa thị trường có tồn tại ở cùng cấp hay không
+        [HttpGet("check-code")]
+        public async Task<IActionResult> CheckCodeExists(
+            [FromQuery] string code,
+            [FromQuery] Guid? parentId = null,
+            [FromQuery] Guid? excludeId = null)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    return BadRequest("Mã không được để trống");
+                }
+
+                var exists = await _service.CheckCodeExistsAsync(code, parentId, excludeId);
+                return Ok(new
+                {
+                    message = exists ?
+                        $"Mã '{code}' đã tồn tại ở cùng cấp độ" :
+                        $"Mã '{code}' có thể sử dụng"
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Đã xảy ra lỗi khi xử lý yêu cầu");
+            }
+        }
+
+            /// <summary>
+            /// Cập nhật thông tin hàng hóa thị trường
+            /// </summary>
+            /// <param name="id">ID của hàng hóa thị trường cần cập nhật</param>
+            /// <param name="updateDto">Thông tin cập nhật</param>
+            /// <returns>Thông tin hàng hóa thị trường sau khi cập nhật</returns>
+            [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] DmHangHoaThiTruongUpdateDto updateDto)
         {
             try

@@ -117,6 +117,19 @@ namespace server.Service.Impl
                 return _mapper.Map<Dm_HangHoaThiTruongDto>(entity);
         }
 
+        public async Task<bool> CheckCodeExistsAsync(string code, Guid? parentId = null, Guid? excludeId = null)
+        {
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    throw new ArgumentException("Mã không được để trống");
+                }
+
+                var exists = await _unitOfWork.HangHoaThiTruongValidation
+                    .IsCodeExistsAtSameLevelAsync(code, parentId, excludeId);
+
+                return exists;
+        }
+
         public async Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto)
         {
             try

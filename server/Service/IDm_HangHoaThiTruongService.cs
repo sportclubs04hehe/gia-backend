@@ -9,6 +9,7 @@ namespace server.Service
         Task<Dm_HangHoaThiTruongDto> CreateAsync(DmHangHoaThiTruongCreateDto createDto);
         
         Task<Dm_HangHoaThiTruongDto?> GetByIdAsync(Guid id);
+        Task<bool> CheckCodeExistsAsync(string code, Guid? parentId = null, Guid? excludeId = null);
         Task<PagedResult<Dm_HangHoaThiTruongDto>> GetChildrenAsync(
             Guid parentId, 
             PagedRequest request, 

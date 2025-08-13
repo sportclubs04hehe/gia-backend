@@ -17,6 +17,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             _logger = logger;
         }
 
+        // Kiểm tra mã tồn tại trên cùng một cấp.
         public async Task<bool> IsCodeExistsAtSameLevelAsync(string code, Guid? parentId, Guid? excludeId = null)
         {
             // SQL query remains the same
