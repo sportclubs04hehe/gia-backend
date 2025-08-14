@@ -11,8 +11,7 @@ namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruong
         public string? GhiChu { get; set; }
         public string? DacTinh { get; set; }
         public DateTime? NgayHieuLuc { get; set; }
-        public DateTime? NgayHetHieuLuc { get; set; }
-        public int RowIndex { get; set; }
+        public DateTime? NgayHetHieuLuc { get; set; }        public int RowIndex { get; set; }
         public string? OriginalMa { get; set; }
         public string? OriginalParentCode { get; set; }
     }

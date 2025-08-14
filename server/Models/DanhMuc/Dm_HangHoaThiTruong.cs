@@ -11,5 +11,6 @@ namespace server.Models.DanhMuc
         public Guid? DonViTinhId { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
+        public bool IsParent { get; set; } = false;
     }
 }

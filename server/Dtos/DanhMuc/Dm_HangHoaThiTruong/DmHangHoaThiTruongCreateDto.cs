@@ -5,15 +5,18 @@ namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
 {
     public class DmHangHoaThiTruongCreateDto
     {
-        [Required(ErrorMessage = "Mã hàng hóa thị trường không được để trống.")]
+        [Required(ErrorMessage = "Mã là bắt buộc")]
         public string Ma { get; set; }
-        [Required(ErrorMessage = "Tên hàng hóa thị trường không được để trống.")]
+        
+        [Required(ErrorMessage = "Tên là bắt buộc")]
         public string Ten { get; set; }
+        
         public string? GhiChu { get; set; }
         public string? DacTinh { get; set; }
         public Guid? DonViTinhId { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
-        public Guid? ParentId { get; set; }  // ID của node cha trong cây
+        public bool IsParent { get; set; } = false; 
+        public Guid? ParentId { get; set; } 
     }
 }

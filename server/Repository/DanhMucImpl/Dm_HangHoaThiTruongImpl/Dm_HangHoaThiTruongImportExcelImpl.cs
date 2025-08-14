@@ -14,6 +14,9 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
     {
         private readonly IDbConnection _dbConnection;
         private readonly ILogger<Dm_HangHoaThiTruongImportExcelImpl> _logger;
+        
+        // Cache for normalized column names to improve performance
+        private static readonly Dictionary<string, string> _normalizedColumnCache = new(StringComparer.OrdinalIgnoreCase);
 
         public Dm_HangHoaThiTruongImportExcelImpl(
             IDbConnection dbConnection,
@@ -29,16 +32,12 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         {
             var result = new ImportResultDto();
 
-            // Check file size (limit to 10MB)
-            const int maxFileSize = 10 * 1024 * 1024; // 10MB
-            if (file.Length > maxFileSize)
+            // Check file size
+            var fileSizeError = ValidateFileSize(file);
+            if (fileSizeError != null)
             {
                 result.ErrorCount = 1;
-                result.Errors.Add(new ImportErrorDto
-                {
-                    Row = 0,
-                    Message = $"Kích thước file vượt quá giới hạn cho phép (10MB). Kích thước hiện tại: {file.Length / (1024.0 * 1024):F2}MB"
-                });
+                result.Errors.Add(fileSizeError);
                 return result;
             }
 
@@ -107,19 +106,30 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
         }
 
+        // Extract file size validation to avoid duplication
+        private ImportErrorDto? ValidateFileSize(IFormFile file)
+        {
+            const int maxFileSize = 10 * 1024 * 1024; // 10MB
+            if (file.Length > maxFileSize)
+            {
+                return new ImportErrorDto
+                {
+                    Row = 0,
+                    Message = $"Kích thước file vượt quá giới hạn cho phép (10MB). Kích thước hiện tại: {file.Length / (1024.0 * 1024):F2}MB"
+                };
+            }
+            return null;
+        }
+
         public async Task<List<ImportErrorDto>> ValidateExcelAsync(IFormFile file)
         {
             var result = new ImportResultDto();
 
-            // Check file size (limit to 10MB)
-            const int maxFileSize = 10 * 1024 * 1024; // 10MB
-            if (file.Length > maxFileSize)
+            // Check file size
+            var fileSizeError = ValidateFileSize(file);
+            if (fileSizeError != null)
             {
-                result.Errors.Add(new ImportErrorDto
-                {
-                    Row = 0,
-                    Message = $"Kích thước file vượt quá giới hạn cho phép (10MB). Kích thước hiện tại: {file.Length / (1024.0 * 1024):F2}MB"
-                });
+                result.Errors.Add(fileSizeError);
                 return result.Errors;
             }
 
@@ -128,20 +138,14 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             if (items == null || items.Count == 0)
                 return result.Errors;
 
-            // Use using statement to ensure connection is properly managed
-            if (_dbConnection.State != ConnectionState.Open)
-                _dbConnection.Open();
-
-            using var transaction = _dbConnection.BeginTransaction();
+            // Validate without database transaction for better performance
             try
             {
-                var errors = await ValidateItemsAsync(items, transaction);
-                transaction.Rollback(); // Just validation, no changes
+                var errors = await ValidateItemsAsync(items, null!);
                 return errors;
             }
             catch (Exception ex)
             {
-                transaction.Rollback();
                 _logger.LogError(ex, "Error validating Excel data");
                 return new List<ImportErrorDto>
         {
@@ -190,8 +194,8 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                 }
             }
 
-            // Define batch size
-            const int batchSize = 1000;
+            // Define optimized batch size based on PostgreSQL performance
+            const int batchSize = 500; // Reduced for better memory usage and transaction performance
 
             // Process in batches following dependency order
             for (int i = 0; i < processOrder.Count; i += batchSize)
@@ -342,11 +346,15 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             return normalizedCode;
         }
 
-        // Thêm phương thức helper để normalize column name
+        // Optimized method to normalize column name with caching
         private string NormalizeColumnName(string columnName)
         {
             if (string.IsNullOrEmpty(columnName))
                 return string.Empty;
+
+            // Check cache first
+            if (_normalizedColumnCache.TryGetValue(columnName, out var cachedResult))
+                return cachedResult;
 
             // Loại bỏ BOM và các ký tự đặc biệt
             var normalized = columnName
@@ -355,6 +363,8 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
                 .Replace("\u00A0", " ") // Non-breaking space
                 .Trim();
 
+            // Cache the result
+            _normalizedColumnCache[columnName] = normalized;
             return normalized;
         }
 
@@ -392,7 +402,9 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
             }
 
             // Case 3: Value is a string that needs to be parsed
-            string dateString = value.ToString().Trim();
+            string? dateString = value.ToString()?.Trim();
+            if (string.IsNullOrEmpty(dateString))
+                return null;
 
             // Try parsing with invariant culture (yyyy-MM-dd)
             if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture,
@@ -493,6 +505,10 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc,
                     parentId = resolvedParentId;
                 }
 
+                // Automatically determine if this is a parent item
+                bool isParent = string.IsNullOrWhiteSpace(item.DonViTinh) &&
+                               string.IsNullOrWhiteSpace(item.DacTinh);
+
                 // Create entity
                 var entity = new Dm_HangHoaThiTruong
                 {
@@ -503,6 +519,7 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc,
                     DacTinh = item.DacTinh,
                     NgayHieuLuc = item.NgayHieuLuc ?? DateTime.Now,
                     NgayHetHieuLuc = item.NgayHetHieuLuc ?? DateTime.Now.AddYears(10),
+                    IsParent = isParent, // Tự động xác định
                     IsDelete = false,
                     CreatedBy = createdBy,
                     CreatedDate = DateTime.Now,
@@ -510,8 +527,8 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc,
                     ModifiedDate = DateTime.Now
                 };
 
-                // Set DonViTinhId if specified
-                if (!string.IsNullOrEmpty(item.DonViTinh) &&
+                // Set DonViTinhId if specified and not a parent
+                if (!isParent && !string.IsNullOrEmpty(item.DonViTinh) &&
                     donViTinhMap.TryGetValue(item.DonViTinh.ToLower(), out var donViTinhId))
                 {
                     entity.DonViTinhId = donViTinhId;
@@ -528,10 +545,10 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @NgayHieuLuc,
                 var insertSql = @"
 INSERT INTO ""Dm_HangHoaThiTruong"" (""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""DacTinh"", 
                                  ""DonViTinhId"", ""NgayHieuLuc"", ""NgayHetHieuLuc"",
-                                 ""IsDelete"", ""CreatedBy"", ""CreatedDate"", 
+                                 ""IsParent"", ""IsDelete"", ""CreatedBy"", ""CreatedDate"", 
                                  ""ModifiedBy"", ""ModifiedDate"")
 VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId, 
-        @NgayHieuLuc, @NgayHetHieuLuc, @IsDelete,
+        @NgayHieuLuc, @NgayHetHieuLuc, @IsParent, @IsDelete,
         @CreatedBy, @CreatedDate, @ModifiedBy, @ModifiedDate)";
 
                 _logger.LogInformation("Executing Bulk Insert SQL: {Sql} for {Count} records",
@@ -563,7 +580,7 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId,
                 .Where(e => e.ParentId.HasValue)
                 .Select(e => new
                 {
-                    AncestorId = e.ParentId.Value,
+                    AncestorId = e.ParentId!.Value, // Use null-forgiving operator since we filtered HasValue
                     DescendantId = e.Entity.Id
                 })
                 .ToList();
@@ -579,22 +596,28 @@ VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId,
                 await _dbConnection.ExecuteAsync(directParentSql, directParentRels, transaction);
             }
 
-            // Bulk insert ancestor relationships
-            foreach (var rel in directParentRels)
+            // Optimized bulk insert ancestor relationships using CTE
+            if (directParentRels.Any())
             {
-                // For each entity with a parent, inherit all ancestors
                 var inheritAncestorsSql = @"
+WITH parent_relations AS (
+    SELECT unnest(@DescendantIds::uuid[]) AS descendant_id,
+           unnest(@ParentIds::uuid[]) AS parent_id
+)
 INSERT INTO ""TreeClosure"" (""AncestorId"", ""DescendantId"", ""Depth"")
-SELECT tc.""AncestorId"", @DescendantId, tc.""Depth"" + 1
+SELECT tc.""AncestorId"", pr.descendant_id, tc.""Depth"" + 1
 FROM ""TreeClosure"" tc
-WHERE tc.""DescendantId"" = @ParentId AND tc.""AncestorId"" != @ParentId";
+JOIN parent_relations pr ON tc.""DescendantId"" = pr.parent_id
+WHERE tc.""AncestorId"" != pr.parent_id";
 
-                _logger.LogInformation("Executing Ancestor SQL: {Sql} with params: {@Params}",
-            inheritAncestorsSql, new { DescendantId = rel.DescendantId, ParentId = rel.AncestorId });
+                var descendantIds = directParentRels.Select(r => r.DescendantId).ToArray();
+                var parentIds = directParentRels.Select(r => r.AncestorId).ToArray();
+
+                _logger.LogInformation("Executing optimized bulk ancestor insert for {Count} relationships", directParentRels.Count);
 
                 await _dbConnection.ExecuteAsync(
                     inheritAncestorsSql,
-                    new { DescendantId = rel.DescendantId, ParentId = rel.AncestorId },
+                    new { DescendantIds = descendantIds, ParentIds = parentIds },
                     transaction);
             }
         }
@@ -681,7 +704,7 @@ WHERE tc.""DescendantId"" = @ParentId AND tc.""AncestorId"" != @ParentId";
             // Log which parent codes were found in the database
             foreach (var parentCode in uniqueParentCodes)
             {
-                if (parentCodesMap.ContainsKey(parentCode))
+                if (!string.IsNullOrEmpty(parentCode) && parentCodesMap.ContainsKey(parentCode))
                     _logger.LogInformation("Parent code {Code} exists in database with ID {Id}", parentCode, parentCodesMap[parentCode]);
                 else
                     _logger.LogInformation("Parent code {Code} does not exist in database yet", parentCode);
@@ -855,6 +878,29 @@ AND (
                     error.ColumnErrors["Mã"] = $"Mã '{item.Ma}' bị trùng lặp ở cùng cấp (dòng {string.Join(", ", duplicates)})";
                 }
 
+                // Validate parent item logic
+                bool isParent = string.IsNullOrWhiteSpace(item.DonViTinh) &&
+                               string.IsNullOrWhiteSpace(item.DacTinh);
+
+                // If item has children in the import, it should be a parent
+                var hasChildren = items.Any(i => i.ParentCode?.Equals(item.Ma, StringComparison.OrdinalIgnoreCase) == true);
+
+                if (hasChildren && !isParent)
+                {
+                    hasError = true;
+                    error.ColumnErrors["Đơn vị tính"] = "Mặt hàng có con phải là mặt hàng cha (không có đơn vị tính và đặc tính)";
+                }
+
+                // If item is identified as parent but has unit or characteristics
+                if (isParent && (!string.IsNullOrWhiteSpace(item.DonViTinh) || !string.IsNullOrWhiteSpace(item.DacTinh)))
+                {
+                    hasError = true;
+                    if (!string.IsNullOrWhiteSpace(item.DonViTinh))
+                        error.ColumnErrors["Đơn vị tính"] = "Mặt hàng cha không được có đơn vị tính";
+                    if (!string.IsNullOrWhiteSpace(item.DacTinh))
+                        error.ColumnErrors["Đặc tính"] = "Mặt hàng cha không được có đặc tính";
+                }
+
                 // Add error if any found
                 if (hasError)
                 {
@@ -875,59 +921,16 @@ AND (
             return columnName;
         }
 
-        // Improved circular reference detection
-        private bool HasCircularReference(
-            string code,
-            string parentCode,
-            Dictionary<string, HangHoaThiTruongImportDto> importItems,
-            HashSet<string>? visited = null)
+        private async Task<Dictionary<string, Guid>> GetDonViTinhMapAsync(IDbTransaction? transaction)
         {
-            // Initialize the visited set if null
-            visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            // Direct self-reference check
-            if (code.Equals(parentCode, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // If we've already visited this parent in this chain, it's a circular reference
-            if (visited.Contains(parentCode))
-                return true;
-
-            // Add the current parent to the visited set for this chain
-            visited.Add(parentCode);
-
-            // Check if the parent's parent creates a circular reference
-            if (importItems.TryGetValue(parentCode, out var parentItem) &&
-                !string.IsNullOrEmpty(parentItem.ParentCode))
-            {
-                return HasCircularReference(code, parentItem.ParentCode, importItems, visited);
-            }
-
-            // No circular reference found
-            return false;
-        }
-
-        private bool HasCircularReference(string code, Dictionary<string, string?> dependencyGraph, HashSet<string>? visited = null)
-        {
-            visited ??= new HashSet<string>();
-
-            if (!dependencyGraph.TryGetValue(code, out var parentCode) ||
-                string.IsNullOrEmpty(parentCode))
-                return false;
-
-            if (visited.Contains(parentCode))
-                return true;
-
-            visited.Add(code);
-            return HasCircularReference(parentCode, dependencyGraph, visited);
-        }
-
-        private async Task<Dictionary<string, Guid>> GetDonViTinhMapAsync(IDbTransaction transaction)
-        {
-            var sql = @"SELECT ""Id"", ""Ten"" FROM ""Dm_DonViTinh"" WHERE ""IsDelete"" = false";
-            _logger.LogInformation("Executing SQL: {Sql}", sql);
+            const string sql = @"SELECT ""Id"", ""Ten"" FROM ""Dm_DonViTinh"" WHERE ""IsDelete"" = false";
+            _logger.LogInformation("Executing optimized DonViTinh query: {Sql}", sql);
+            
             var units = await _dbConnection.QueryAsync<(Guid Id, string Ten)>(sql, transaction: transaction);
-            return units.ToDictionary(u => u.Ten.ToLower(), u => u.Id, StringComparer.OrdinalIgnoreCase);
+
+            // Use ToLookup for better performance with large datasets
+            var lookup = units.ToLookup(u => u.Ten.ToLowerInvariant());
+            return lookup.ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
         }
 
         private List<HangHoaThiTruongImportDto> BuildProcessingOrder(List<HangHoaThiTruongImportDto> items)
