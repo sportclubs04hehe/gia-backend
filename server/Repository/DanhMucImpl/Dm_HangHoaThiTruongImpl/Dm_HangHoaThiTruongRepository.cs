@@ -27,7 +27,7 @@ namespace server.Repository.DanhMucImpl.Dm_HangHoaThiTruongImpl
         {
             var sql = @"
 SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"", 
-       h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
+       h.""NgayHieuLuc"", h.""NgayHetHieuLuc"", h.""IsParent"",
        h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
        h.""CreatedBy"", h.""ModifiedBy"",
        h.""DonViTinhId"",
@@ -86,7 +86,7 @@ WITH ParentNodes AS (
     WHERE tc.""Depth"" = 1
 )
 SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"",
-       h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
+       h.""NgayHieuLuc"", h.""NgayHetHieuLuc"", h.""IsParent"",
        h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
        h.""CreatedBy"", h.""ModifiedBy"",
        CASE WHEN p.""AncestorId"" IS NOT NULL THEN true ELSE false END AS ""HasChildren"",
@@ -124,7 +124,7 @@ ORDER BY
         public async Task<PagedResult<Dm_HangHoaThiTruongJoined>> GetChildrenAsync(
             Guid parentId,
             PagedRequest request,
-            string searchTerm = null)
+            string? searchTerm = null)
         {
             // Input validation
             if (request.PageNumber < 1)
@@ -210,7 +210,7 @@ ORDER BY
 
     -- Get paged data with unit name and hasChildren info
     SELECT h.""Id"", h.""Ma"", h.""Ten"", h.""GhiChu"", h.""DacTinh"", 
-           h.""DonViTinhId"", h.""NgayHieuLuc"", h.""NgayHetHieuLuc"",
+           h.""DonViTinhId"", h.""NgayHieuLuc"", h.""NgayHetHieuLuc"", h.""IsParent"",
            h.""IsDelete"", h.""CreatedDate"", h.""ModifiedDate"",
            h.""CreatedBy"", h.""ModifiedBy"",
            dvt.""Ten"" AS ""DonViTinhTen"",
@@ -253,7 +253,7 @@ ORDER BY
         }
 
         // Thêm mới hàng hóa với khả năng thiết lập cha mới
-        public async Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null, IDbTransaction transaction = null)
+        public async Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null, IDbTransaction? transaction = null)
         {
             // Đảm bảo entity có Id nếu chưa được set
             if (entity.Id == Guid.Empty)
@@ -262,9 +262,9 @@ ORDER BY
             // SQL để thêm mới hàng hóa - Sử dụng dấu ngoặc kép cho tên bảng và cột
             var insertSql = @"
                 INSERT INTO ""Dm_HangHoaThiTruong"" (""Id"", ""Ma"", ""Ten"", ""GhiChu"", ""DacTinh"", ""DonViTinhId"", 
-                                                   ""NgayHieuLuc"", ""NgayHetHieuLuc"", ""CreatedDate"", ""ModifiedDate"", ""IsDelete"")
+                                                   ""NgayHieuLuc"", ""NgayHetHieuLuc"", ""IsParent"", ""CreatedDate"", ""ModifiedDate"", ""IsDelete"")
                 VALUES (@Id, @Ma, @Ten, @GhiChu, @DacTinh, @DonViTinhId, @NgayHieuLuc, @NgayHetHieuLuc, 
-                        NOW(), NOW(), @IsDelete);
+                        @IsParent, NOW(), NOW(), @IsDelete);
                 SELECT * FROM ""Dm_HangHoaThiTruong"" WHERE ""Id"" = @Id;";
 
             _logger.LogInformation($"Execute SQL: {insertSql} with parameters: {System.Text.Json.JsonSerializer.Serialize(entity)}");
@@ -277,15 +277,24 @@ ORDER BY
             // Sử dụng transaction được truyền vào thay vì tạo mới
             var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(
                 insertSql, entity, transaction);
+            
+            if (result == null)
+                throw new InvalidOperationException($"Không thể thêm mới hàng hóa thị trường với ID: {entity.Id}");
 
             // Truyền cùng transaction vào hàm UpdateTreeClosureAsync
-            await _hierarchyRepository.UpdateTreeClosureAsync(entity.Id, parentId, transaction);
+            await _hierarchyRepository.UpdateTreeClosureAsync(entity.Id, parentId, transaction!);
+
+            // Nếu có parentId, cập nhật IsParent của parent thành true
+            if (parentId.HasValue)
+            {
+                await UpdateParentIsParentStatus(parentId.Value, transaction);
+            }
 
             return result;
         }
 
         // Cập nhật hàng hóa với khả năng thay đổi cha mới
-        public async Task<Dm_HangHoaThiTruong> UpdateAsync(Dm_HangHoaThiTruong entity, Guid? newParentId = null, IDbTransaction transaction = null)
+        public async Task<Dm_HangHoaThiTruong> UpdateAsync(Dm_HangHoaThiTruong entity, Guid? newParentId = null, IDbTransaction? transaction = null)
         {
             // SQL to update the entity with proper double quotes for PostgreSQL
             var updateSql = @"
@@ -297,6 +306,7 @@ ORDER BY
             ""DonViTinhId"" = @DonViTinhId,
             ""NgayHieuLuc"" = @NgayHieuLuc, 
             ""NgayHetHieuLuc"" = @NgayHetHieuLuc,
+            ""IsParent"" = @IsParent,
             ""ModifiedDate"" = NOW(),
             ""ModifiedBy"" = @ModifiedBy
         WHERE ""Id"" = @Id AND ""IsDelete"" = false
@@ -312,10 +322,25 @@ ORDER BY
             var result = await _dbConnection.QueryFirstOrDefaultAsync<Dm_HangHoaThiTruong>(
                 updateSql, entity, transaction);
 
-            if (result != null && newParentId.HasValue)
+            if (result == null)
+                throw new InvalidOperationException($"Không thể cập nhật hàng hóa thị trường với ID: {entity.Id}");
+
+            if (newParentId.HasValue)
             {
+                // Lấy parent cũ trước khi thay đổi
+                var oldParentId = await GetCurrentParentId(entity.Id);
+                
                 // Update the hierarchical structure if parent has changed
-                await _hierarchyRepository.UpdateParentAsync(entity.Id, newParentId.Value, transaction);
+                await _hierarchyRepository.UpdateParentAsync(entity.Id, newParentId.Value, transaction!);
+                
+                // Cập nhật IsParent cho parent mới
+                await UpdateParentIsParentStatus(newParentId.Value, transaction);
+                
+                // Cập nhật IsParent cho parent cũ (nếu có)
+                if (oldParentId.HasValue)
+                {
+                    await UpdateParentIsParentStatus(oldParentId.Value, transaction);
+                }
             }
 
             return result;
@@ -343,6 +368,9 @@ ORDER BY
         // Xóa mềm một hàng hóa và tất cả các hàng hóa con của nó
         public async Task<int> DeleteAsync(Guid id, IDbTransaction? transaction = null)
         {
+            // Lấy parent của node trước khi xóa
+            var parentId = await GetCurrentParentId(id);
+            
             var sql = @"
         WITH RECURSIVE TreeItems AS (
             -- Lấy tất cả các node con (bao gồm cả node hiện tại)
@@ -368,6 +396,12 @@ ORDER BY
                 new { Id = id },
                 transaction);
 
+            // Cập nhật IsParent của parent nếu có
+            if (parentId.HasValue)
+            {
+                await UpdateParentIsParentStatus(parentId.Value, transaction);
+            }
+
             return affectedRows;
         }
 
@@ -376,6 +410,17 @@ ORDER BY
         {
             if (ids == null || !ids.Any())
                 return 0;
+
+            // Lấy danh sách parents của các nodes sẽ bị xóa
+            var parentIds = new List<Guid>();
+            foreach (var id in ids)
+            {
+                var parentId = await GetCurrentParentId(id);
+                if (parentId.HasValue && !parentIds.Contains(parentId.Value))
+                {
+                    parentIds.Add(parentId.Value);
+                }
+            }
 
             var sql = @"
         WITH RECURSIVE AllItems AS (
@@ -402,6 +447,12 @@ ORDER BY
                 new { Ids = ids },
                 transaction);
 
+            // Cập nhật IsParent cho tất cả các parents
+            foreach (var parentId in parentIds)
+            {
+                await UpdateParentIsParentStatus(parentId, transaction);
+            }
+
             return affectedRows;
         }
 
@@ -415,8 +466,8 @@ ORDER BY
         -- Thay thế bằng các bảng thực tế trong hệ thống của bạn
         SELECT EXISTS (
             SELECT 1 
-            FROM -- Thay thế bằng tên bảng thực tế, ví dụ: ""ChiTietDonHang""
-            WHERE ""HangHoaThiTruongId"" = @Id
+            FROM ""TreeClosure"" tc 
+            WHERE tc.""AncestorId"" = @Id OR tc.""DescendantId"" = @Id
             LIMIT 1
         );";
 
@@ -427,11 +478,8 @@ ORDER BY
                 _dbConnection.Open();
             }
 
-            // Nếu không có bảng tham chiếu thì luôn trả về false
-            // return await _dbConnection.ExecuteScalarAsync<bool>(sql, new { Id = id });
-
-            // Tạm thời trả về false vì chưa có các bảng tham chiếu cụ thể
-            return false;
+            // Trả về false cho đến khi có logic kiểm tra thực tế
+            return await _dbConnection.QueryFirstOrDefaultAsync<bool>(sql, new { Id = id });
         }
 
         // Đếm số lượng node con trực tiếp và gián tiếp của một node
@@ -450,6 +498,57 @@ ORDER BY
             }
 
             return await _dbConnection.ExecuteScalarAsync<int>(sql, new { Id = id });
+        }
+
+        // Cập nhật trạng thái IsParent của một node dựa trên việc có con hay không
+        private async Task UpdateParentIsParentStatus(Guid parentId, IDbTransaction? transaction = null)
+        {
+            var sql = @"
+                UPDATE ""Dm_HangHoaThiTruong""
+                SET ""IsParent"" = CASE 
+                    WHEN EXISTS (
+                        SELECT 1 
+                        FROM ""TreeClosure"" tc 
+                        WHERE tc.""AncestorId"" = @ParentId 
+                          AND tc.""Depth"" = 1
+                          AND EXISTS (
+                              SELECT 1 
+                              FROM ""Dm_HangHoaThiTruong"" child
+                              WHERE child.""Id"" = tc.""DescendantId""
+                                AND child.""IsDelete"" = false
+                          )
+                    ) THEN true 
+                    ELSE false 
+                END,
+                ""ModifiedDate"" = NOW()
+                WHERE ""Id"" = @ParentId AND ""IsDelete"" = false";
+
+            _logger.LogInformation($"Execute SQL: {sql} with ParentId: {parentId}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            await _dbConnection.ExecuteAsync(sql, new { ParentId = parentId }, transaction);
+        }
+
+        // Lấy parent hiện tại của một node
+        private async Task<Guid?> GetCurrentParentId(Guid nodeId)
+        {
+            var sql = @"
+                SELECT tc.""AncestorId""
+                FROM ""TreeClosure"" tc
+                WHERE tc.""DescendantId"" = @NodeId AND tc.""Depth"" = 1";
+
+            _logger.LogInformation($"Execute SQL: {sql} with NodeId: {nodeId}");
+
+            if (_dbConnection.State != ConnectionState.Open)
+            {
+                _dbConnection.Open();
+            }
+
+            return await _dbConnection.QueryFirstOrDefaultAsync<Guid?>(sql, new { NodeId = nodeId });
         }
     }
 }

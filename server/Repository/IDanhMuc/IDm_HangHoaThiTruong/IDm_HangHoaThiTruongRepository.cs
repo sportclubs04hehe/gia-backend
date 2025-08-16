@@ -13,15 +13,15 @@ namespace server.Repository.IDanhMuc.IDm_HangHoaThiTruong
         Task<PagedResult<Dm_HangHoaThiTruongJoined>> GetChildrenAsync(
             Guid parentId,
             PagedRequest request,
-            string searchTerm = null);
+            string? searchTerm = null);
 
         // Lấy mặt hàng theo ID
         Task<Dm_HangHoaThiTruong?> GetByIdAsync(Guid id);
         // Thêm mới một mặt hàng với cha (nếu có) và cập nhật cấu trúc cây    
-        Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null, IDbTransaction transaction = null);
+        Task<Dm_HangHoaThiTruong> AddAsync(Dm_HangHoaThiTruong entity, Guid? parentId = null, IDbTransaction? transaction = null);
         
         // Cập nhật một mặt hàng với cha mới (nếu có) và cập nhật cấu trúc cây
-        Task<Dm_HangHoaThiTruong> UpdateAsync(Dm_HangHoaThiTruong entity, Guid? newParentId = null, IDbTransaction transaction = null);
+        Task<Dm_HangHoaThiTruong> UpdateAsync(Dm_HangHoaThiTruong entity, Guid? newParentId = null, IDbTransaction? transaction = null);
 
         // Xóa một mặt hàng
         Task<int> DeleteAsync(Guid id, IDbTransaction? transaction = null);

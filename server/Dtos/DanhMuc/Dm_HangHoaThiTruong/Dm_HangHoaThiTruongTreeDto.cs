@@ -3,9 +3,8 @@
     /// <summary>
     /// Dùng cho tree view (lazy loading hoặc full tree), có Children để lồng cấu trúc.
     /// </summary>
-    public class Dm_HangHoaThiTruongTreeDto
+    public class Dm_HangHoaThiTruongTreeDto : BaseDto
     {
-        public Guid Id { get; set; }
         public string Ma { get; set; } = string.Empty;
         public string Ten { get; set; } = string.Empty;
         public string? GhiChu { get; set; }

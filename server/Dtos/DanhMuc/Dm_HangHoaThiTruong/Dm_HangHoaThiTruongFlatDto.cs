@@ -1,9 +1,8 @@
 ﻿namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
 {
     // Dùng cho báo cáo dạng phẳng, không cần Children
-    public class Dm_HangHoaThiTruongFlatDto
+    public class Dm_HangHoaThiTruongFlatDto : BaseDto
     {
-        public Guid Id { get; set; }
         public string Ma { get; set; }
         public string Ten { get; set; }
         public string? GhiChu { get; set; }

@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 
 namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
 {
@@ -16,7 +15,7 @@ namespace server.Dtos.DanhMuc.Dm_HangHoaThiTruongDto
         public Guid? DonViTinhId { get; set; }
         public DateTime NgayHieuLuc { get; set; }
         public DateTime NgayHetHieuLuc { get; set; }
-        public bool IsParent { get; set; } = false; 
+        public bool IsParent { get; set; } = true; 
         public Guid? ParentId { get; set; } 
     }
 }

@@ -13,7 +13,7 @@ namespace server.Service
         Task<PagedResult<Dm_HangHoaThiTruongDto>> GetChildrenAsync(
             Guid parentId, 
             PagedRequest request, 
-            string searchTerm = null);
+            string? searchTerm = null);
         Task<Dm_HangHoaThiTruongDto> UpdateAsync(DmHangHoaThiTruongUpdateDto updateDto);
         Task<DeleteResult> DeleteAsync(Guid id);
         Task<DeleteResult> DeleteManyAsync(IEnumerable<Guid> ids);
